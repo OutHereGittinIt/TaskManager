@@ -126,6 +126,7 @@ opts.chkbx_w        = 150;
 opts.clr_name_w     = 70; %*
 opts.clr_h          = 33; %*
 opts.clr_fs         = 16; %*
+opts.collapse_sz    = 25;
 opts.data_filename  = 'TaskManager_User_Data.mat';
 opts.DateFormat     = 'MM/dd/uuuu';
 opts.date_lbl_w_s   = 135; %**
@@ -478,7 +479,7 @@ centerfig(f)
 end
 
 function ExampleTask = empty_task(example_task_ind)
-%% Return example task to initialize proper struct fields in Tasks struct array
+%% Return example task to initialize proper struct fields in Tasks struct array and for displaying while modifying settings
 
 % Create example task
 ExampleTask.Name                = 'Example Task';
@@ -486,6 +487,8 @@ ExampleTask.Type                = 'One time event';
 
 % New task attributes (non-contingent) :
 ExampleTask.Color               = [];
+ExampleTask.Collapsed           = false;
+ExampleTask.Collapsing          = false;
 ExampleTask.Comment             = '';
 ExampleTask.Completed           = false;
 ExampleTask.CompletionDate      = '';
@@ -583,7 +586,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-       || ~isequal(UserData.CompatabilityVerified,'3/2/2025 II') 
+       || ~isequal(UserData.CompatabilityVerified,'3/14/2025') 
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -899,6 +902,12 @@ for task_ind = update_ind
             add_move_to_button(f,task_ind,parent_panel,opts);
         end
 
+        % Create collapse cion for folders
+        if Task.isFolder && ~isempty(Task.SubTasks)
+            collapsable = true;
+            add_collapse_icon(parent_panel,Task,task_ind,opts)
+        end
+
         % Find and store label objects for update_task_panel
         Task = store_task_objects(parent_panel,Task,task_ind,opts);
         f.UserData.Tasks(task_ind) = Task;
@@ -915,6 +924,7 @@ for task_ind = update_ind
         task_panel      = Task.Labels.Panel;
         move_from_btn   = Task.Labels.MoveFrom;
         move_to_btn     = Task.Labels.MoveTo;
+        collapse        = Task.Labels.Collapse;
         desc            = Task.Labels.Description;
     end
 
@@ -944,17 +954,21 @@ for task_ind = update_ind
 
     stored_pos = [Task.xpos,Task.ypos];
 
+    % update task position and collapse icon
+    if strcmpi(call_option,'normal') && ~isequal(task_panel.Position(1:2),stored_pos)
+        task_panel.Position(1:2) = stored_pos;
+        if collapsable
+            collapse.Position(1:2) = collapse_position(stored_pos,opts);
+        end
+    end
+
     % update priority mover button locations
     if strcmpi(call_option,'normal') && task_panel.Position(2) ~= stored_pos(2)
         % y position
         move_from_btn.Position(2) = Task.PriorityBtnYPos;
         move_to_btn.Position(2)   = Task.PriorityBtnYPos;
     end
-
-    % update task position
-    if strcmpi(call_option,'normal') && ~isequal(task_panel.Position(1:2),stored_pos)
-        task_panel.Position(1:2) = stored_pos;
-    end
+    
 
     %% Task Color
 
@@ -1072,7 +1086,12 @@ else
     ypos = net_task_height; % ~~~ need to add ypos spacer here! Not 100% sure how
 end
 
-xpos = opts.spacer;
+start_xpos = opts.spacer;
+
+% leave room for folder collapse icon only if used
+if any([Tasks(display_ind).isFolder])
+    start_xpos = start_xpos + opts.collapse_sz;
+end
 
 % init pos vectors
 xpos_vec            = cell(NumTasks,1);
@@ -1081,7 +1100,7 @@ PriorityBtnYPos_vec = cell(NumTasks,1);
 
 % set each original task and their subtasks position
 for task_ind = Original_Task_inds
-    [ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec] = set_task_positions(Tasks,task_ind,RankBy,opts,xpos,ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec,display_ind);
+    [ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec] = set_task_positions(Tasks,task_ind,RankBy,opts,start_xpos,ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec,display_ind);
 end
 
 if task_ind == opts.max_num_tasks
@@ -1117,6 +1136,8 @@ end
 if ~UserData.Show.PastDue
     tf = tf & ~[Tasks.PastDue];
 end
+
+tf = tf & [Tasks.Collapsed];
 end
 
 function Task_inds = order_tasks(Tasks,Task_inds,RankBy)
@@ -1707,6 +1728,7 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
 
     % assign task attributes:
     Task.CreationDate   = datetime;
+    Task.Collapsing     = false;
     Task.Completed      = false;
     Task.Deleted        = false;
     Task.isDrawn        = false;
@@ -1716,6 +1738,7 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
 
     % Set original flag and parent ind
     if isempty(parent_task_ind)
+        Task.Collapsed  = false;
         Task.isOriginal = true;
         Task.ParentTask = [];
     else
@@ -1724,6 +1747,9 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
         % add new task to the parent task subtask list
         f.UserData.Tasks(parent_task_ind).SubTasks = ...
             [f.UserData.Tasks(parent_task_ind).SubTasks,task_ind];
+        
+        % set collapsed status based on parent
+        Task.Collapsed = f.UserData.Tasks(parent_task_ind).Collapsing;
     end
 
     % Assign New Task to task list
@@ -2855,21 +2881,19 @@ end
 function Task = store_task_objects(parent_panel,Task,task_ind,opts)
 %% Store various uiobjects to user data tasks strcut array to reference quickly for update
 
+% ~~~ is this stupid?? I feel like it may be
+
 % panel
-task_panel = findobj(parent_panel,'Tag',['Task ',num2str(task_ind)]);
-Task.Labels.Panel = task_panel;
+Task.Labels.Panel = findobj(parent_panel,'Tag',['Task ',num2str(task_ind)]);
 
 % description
-desc = findobj(parent_panel,'Tag',['description ',num2str(task_ind)]);
-Task.Labels.Description = desc;
+Task.Labels.Description = findobj(parent_panel,'Tag',['description ',num2str(task_ind)]);
 
 % move to
-move_to_btn   = findobj(parent_panel,'Tag',['Move to ',num2str(task_ind)]);
-Task.Labels.MoveTo = move_to_btn;
+Task.Labels.MoveTo = findobj(parent_panel,'Tag',['Move to ',num2str(task_ind)]);
 
 % move from
-move_from_btn = findobj(parent_panel,'Tag',['Move from ',num2str(task_ind)]);
-Task.Labels.MoveFrom = move_from_btn;
+Task.Labels.MoveFrom = findobj(parent_panel,'Tag',['Move from ',num2str(task_ind)]);
 
 % optional fields
 for vars = opts.OptionalFields
@@ -2878,6 +2902,9 @@ for vars = opts.OptionalFields
     field_str = replace(vars{1},' ','');
     Task.Labels.(field_str) = lbl_obj;
 end
+
+% collpase icon
+Task.Labels.Collapse = findobj(parent_panel,'Tag',['Collapse ',num2str(task_ind)]);
 
 Task.isDrawn = true; % ~~~ kind of weird place to put this but makes snese becuase we are resaving the task to f.UserData here anyway
 end
@@ -2971,4 +2998,53 @@ if all([subtasks(isAlive).Completed])
 else
     tf = false;
 end
+end
+
+function add_collapse_icon(f,parent_panel,Task,task_ind,opts)
+%% Draw icon for collapsing sub-items of folders
+
+if Task.Collapsing
+    collapse_icon = 'collapsed.png';
+else
+    collapse_icon = 'uncollapsed.jpg';
+end
+
+pos = [0,0,opts.collapse_sz,opts.collapse_sz];
+uibutton(parent_panel,'Tag',['Collapse ',num2str(task_ind)],...
+    'Position',pos,'Icon',collapse_icon,...
+    'ButtonPushedFcn',@(self,~)toggle_collapse(f,self,task_ind,opts));
+end
+
+function toggle_collapse(f,self,task_ind,opts)
+%% Toggle the collapsing status of a folder 
+
+f.Pointer = 'watch';
+
+% collapsing on or off boolean
+Collapse = ~f.UserData.Tasks(task_ind).Collapsing;
+
+% set collapsing
+f.UserData.Tasks(task_ind).Collapsing = Collapse;
+
+% set sub-item collapsed
+subtasks = f.UserData.Tasks(task_ind).SubTasks;
+[f.UserData.Tasks(subtasks).Collapsed] = Collapse;
+
+% switch icon
+if Collapse
+    collapse_icon = 'collapsed.png';
+else
+    collapse_icon = 'uncollapsed.jpg';
+end
+
+self.Icon = collapse_icon;
+
+update_tasks_panel(f,opts,'normal')
+autosave_tasks(f,opts)
+f.Pointer = 'arrow';
+end
+
+function pos = collapse_position(panel_pos,opts)
+%% Return collapse icon origin (1x2) from task panel position 
+pos = panel_pos(1:2) - [opts.collapse_sz,(opts.collapse_sz-panel_pos(2))/2];
 end

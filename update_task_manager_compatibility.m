@@ -50,6 +50,18 @@ if ~isfield(UserData.Tasks,'isFolder')
     end
 end
 
+if ~isfield(UserData.Tasks,'Collapsed')
+    for ind = 1:UserData.NumTasks
+        UserData.Tasks(ind).isFolder = false;
+    end
+end
+
+if ~isfield(UserData.Tasks,'Collapsing')
+    for ind = 1:UserData.NumTasks
+        UserData.Tasks(ind).isFolder = false;
+    end
+end
+
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '3/2/2025 II';
+UserData.CompatabilityVerified = '3/14/2025';
 end
