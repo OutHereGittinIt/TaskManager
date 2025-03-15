@@ -130,7 +130,7 @@ opts.data_filename  = 'TaskManager_User_Data.mat';
 opts.DateFormat     = 'MM/dd/uuuu';
 opts.date_lbl_w_s   = 135; %**
 opts.date_lbl_w     = 155; %**'Autosave Label'
-opts.default_fname  = 'MyTasks';
+opts.default_fname  = 'MyTasks'; % ~~~ kinda silly, tbh
 opts.DefaultDurVal  = '3';
 opts.DefaultDurStr  = 'Days';
 opts.desc_w         = 400; % Task description width in add task GUI
@@ -219,6 +219,7 @@ opts.stat_pan_h = 5*opts.tx_h + 6*opts.spacer;
 % figure size
 opts.fig_w = opts.left_pan_w + opts.task_pan_w + 3 * opts.spacer;
 if groot().MonitorPositions(4) == 1
+    % not sure why this happens, but it did.
     opts.fig_h = 800;
 else
     opts.fig_h = groot().MonitorPositions(4) * opts.screen_height_ratio;
@@ -233,6 +234,10 @@ opts.duration_w = opts.num_w_l + opts.dur_w_l;
 % folder naming
 opts.folder         = fileparts(mfilename("fullpath"));
 opts.data_filename  = fullfile(opts.folder,opts.data_filename);
+opts.manager_loc    = fullfile(opts.folder,'Managers');
+if ~isfolder(opts.manager_loc)
+    mk_dir(opts.manager_loc)
+end
 
 % X-position of color objects in 'Colors' settings option
 opts.color_objects_x0 = opts.clr_name_w + opts.duration_w + 4*opts.spacer;
@@ -375,14 +380,19 @@ end
 
 function filename = new_filename(opts)
 %% Return new & unused default filename for new task manager
-good_name = false;
-counter = 1;
+good_name   = false;
+counter     = 1;
+max_counter = 50;
 while ~good_name
-    filename = [opts.default_fname,num2str(counter)];
-    if ~exist([filename,'_TM.mat'],'file')
+    filename = [opts.default_fname,num2str(counter)]; 
+    if ~exist(fullfile(opts.folder,[filename,'_TM.mat']),'file')% ~~~ needs to be fixd to used manager_loc
         good_name = true;
     else 
         counter = counter + 1;
+    end
+    % Prevent infinite loop (just in case)
+    if counter > max_counter
+        error("Too many of these files, or infinite loop error. Either way, please attend to")
     end
 end
 end
@@ -1359,12 +1369,12 @@ end
 % Define all of the task icon buttons
 Comment.Tooltip     = 'Add Comment';
 Comment.CallBack    = @(~,~)edit_comment(f,Task_ind,opts);
+Comment.Enable      = true;
 if isempty(f.UserData.Tasks(Task_ind).Comment)
     Comment.Icon    = 'notes.jpg';
 else
     Comment.Icon    = 'notes_present.png';
 end
-Comment.Enable      = true;
 
 Subtask.Tooltip     = 'Add Subtask';
 Subtask.Icon        = 'plus.png';
@@ -1384,8 +1394,7 @@ Edit.Enable         = true;
 Complete.Tooltip    = 'Complete Task';
 Complete.Icon       = 'checkmark.png';
 Complete.CallBack   = @(~,~)complete_task_wrapper(f,Task_ind,opts);
-Complete.Enable     = strcmpi(f.UserData.CompletionMode,'manual') ...
-                      || isempty(f.UserData.Tasks(Task_ind).SubTasks); % ~~~ this should be in update tasks instead
+Complete.Enable     = true;
 
 Delete.Tooltip      = 'Delete Task';
 Delete.Icon         = 'trash.png';
@@ -1724,9 +1733,8 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
     % with new option to go above completed tasks
     f.UserData.Tasks(task_ind).Priority = numel(find_siblings(f,task_ind)) + 1;
 
-    % Uncomplete parent task as necessary
-    if strcmpi(f.UserData.CompletionMode,'by subtask') ...
-            && ~isempty(parent_task_ind) && f.UserData.Tasks(parent_task_ind).Completed
+    % Uncomplete parent task as necessary (if exists, if is folder, and if currently complete)
+    if ~isempty(parent_task_ind) && f.UserData.Tasks(parent_task_ind).isFolder && f.UserData.Tasks(parent_task_ind).Completed
         f.UserData.Tasks(parent_task_ind).Completed = false;
     end
 end
@@ -2031,14 +2039,11 @@ lbl_obj.Text = completed_task_string(f.UserData.Tasks(Task_ind),opts);
 % Task completed --> check parent for completion (this instance)
 % New Task added --> check parent for completion
 
-% Check to complete parent_task if not original
-if strcmpi(f.UserData.CompletionMode,'by subtask') && ~f.UserData.Tasks(Task_ind).isOriginal
-    % Find sibling tasks
-    displayed_siblings = isDisplayed(f.UserData,find_siblings(f,Task_ind));
-    if all([f.UserData.Tasks(displayed_siblings).Completed])
-        % Use recursive call here to continue checking up the chain
-        ParentTask = f.UserData.Tasks(Task_ind).ParentTask;
-        complete_task(f,ParentTask,opts)
+% Check to complete parent_task recursively if exists and is folder
+if ~f.UserData.Tasks(Task_ind).isOriginal
+    parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
+    if f.UserData.Tasks(parent_ind).isFolder && isComplete_folder(f,parent_ind)
+        complete_task(f,parent_ind,opts)
     end
 end
 end
@@ -2052,6 +2057,14 @@ f.UserData = store_previous_tasks(f.UserData);
 
 % original call with recursive calls
 delete_task(f,Task_ind)
+
+% Complete parent task if exists and folder that is not complete
+if ~f.UserData.Tasks(Task_ind).isOriginal
+    parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
+    if isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed
+        f.UserData.Tasks(parent_ind).Completed = true;
+    end
+end
 
 % update display
 update_tasks_panel(f,opts,'normal')
@@ -2935,4 +2948,27 @@ task_edit_btn.ButtonPushedFcn = @(~,~)add_task_gui(f,task_ind,opts,edit_str);
 delete(f2)
 update_tasks_panel(f,opts,'normal')
 autosave_tasks(f,opts)
+end
+
+function tf = isComplete_folder(f,Task_ind)
+%% check if all alive subtasks of folder are completed
+% alive as in not deleted
+
+Task = f.UserData.Tasks(Task_ind);
+
+% N/A for task items, only folder items
+if ~Task.isFolder
+    tf = false;
+    return
+end
+
+% check completion & deletion status of task
+subtasks = f.UserData.Tasks(Task.SubTasks);
+
+isAlive = ~[subtasks.Deleted];
+if all([subtasks(isAlive).Completed])
+    tf = true;
+else
+    tf = false;
+end
 end
