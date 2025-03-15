@@ -581,12 +581,12 @@ delete(f)
 f = create_figure(opts,filename);
 
 % load UserData and check for / fix compatability!
-load(fullfile(opts.folder,filename),'UserData')
+load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
        || ~isequal(UserData.CompatabilityVerified,'3/2/2025 II') 
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
-    save(fullfile(opts.folder,filename),'UserData')
+    save(fullfile(opts.manager_loc,filename),'UserData')
 end
 
 f.UserData  = UserData;
@@ -2118,7 +2118,7 @@ if isfield(UserData,'Old')
 end
 
 % save userdata
-save(fullfile(opts.folder,f.UserData.Name),'UserData')
+save(fullfile(opts.manager_loc,f.UserData.Name),'UserData')
 tx_obj      = findobj(f,'Tag','Autosave Label');
 tx_obj.Text = autosave_str;
 QuickHighlight(tx_obj,f)
