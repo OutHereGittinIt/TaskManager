@@ -386,7 +386,7 @@ counter     = 1;
 max_counter = 50;
 while ~good_name
     filename = [opts.default_fname,num2str(counter)]; 
-    if ~exist(fullfile(opts.folder,[filename,'_TM.mat']),'file')% ~~~ needs to be fixd to used manager_loc
+    if ~exist(fullfile(opts.manager_loc,[filename,'_TM.mat']),'file')
         good_name = true;
     else 
         counter = counter + 1;
@@ -448,7 +448,7 @@ f.UserData.Old  = f.UserData;
 
 % Save to new file
 UserData        = f.UserData;
-fullfilename    = fullfile(opts.folder,f.UserData.Name);
+fullfilename    = fullfile(opts.manager_loc,f.UserData.Name);
 filename        = f.UserData.Name;
 save(fullfilename,'UserData')
 
@@ -518,6 +518,7 @@ ExampleTask.RegularityHeight    = [];
 ExampleTask.CompletionDateHeight= [];
 ExampleTask.CreationDateHeight  = [];
 ExampleTask.Height              = [];
+ExampleTask.Width               = [];
 
 ExampleTask.DueDate        = 'N/A';
 ExampleTask.DurationStr    = 'N/A';
@@ -831,7 +832,7 @@ end
 
 % initializing updating status
 parent_fig.Pointer = 'watch'; drawnow;
-parent_panel.Visible = false;
+% parent_panel.Visible = false; ~~~ CHANGE! Just for debug
 
 switch call_option
     case 'normal'
@@ -890,11 +891,20 @@ for task_ind = update_ind
 
     Task = Tasks(task_ind);
 
+    %% Collapsable
+
+    if Task.isFolder && ~isempty(Task.SubTasks)
+        collapsable = true;
+    else
+        collapsable = false;
+    end
+
     %% Task Existence
 
     if ~Task.isDrawn && Display_vec(task_ind)
         % Create task uipanel, with icons & labels.
         create_task_panel(f,task_ind,parent_panel,opts);
+        Task = f.UserData.Tasks(task_ind);
 
         % Create priority mover buttons ("to" and "from")
         if strcmpi(call_option,'normal')
@@ -902,17 +912,11 @@ for task_ind = update_ind
             add_move_to_button(f,task_ind,parent_panel,opts);
         end
 
-        % Create collapse cion for folders
-        if Task.isFolder && ~isempty(Task.SubTasks)
-            collapsable = true;
-            add_collapse_icon(parent_panel,Task,task_ind,opts)
-        end
-
         % Find and store label objects for update_task_panel
         Task = store_task_objects(parent_panel,Task,task_ind,opts);
         f.UserData.Tasks(task_ind) = Task;
 
-        % reflect as completed
+        % reflect as completed in uiprogressbar
         if exist('pgb','var')
             num_tasks_drawn = num_tasks_drawn + 1;
             pgb.Value = num_tasks_drawn/num_tasks;
@@ -928,6 +932,19 @@ for task_ind = update_ind
         desc            = Task.Labels.Description;
     end
 
+    % Collapse existence
+    if collapsable && isempty(collapse)
+        % add collapsable icon if not already added and is appropriate
+        collapse = add_collapse_icon(f,parent_panel,Task,task_ind,opts);
+        
+        % Store this object in userdata
+        Task.Labels.Collapse = collapse;
+        f.UserData.Tasks(task_ind) = Task;
+    elseif ~collapsable && ~isempty(collapse)
+        % remove collapse icon if already added and no longer appropriate
+        delete(collapse)
+    end
+
     %% Visibility
 
     % check that (should be) displayed matches visible
@@ -936,7 +953,6 @@ for task_ind = update_ind
     end
 
     if ~Display_vec(task_ind)
-
         if Task.isDrawn
             % make sure move to and move from buttons are not showing
             if move_from_btn.Visible
@@ -944,6 +960,10 @@ for task_ind = update_ind
             end
             if move_to_btn.Visible
                 move_to_btn.Visible = false;
+            end
+
+            if collapsable
+                collapse.Visible = false;
             end
         end
         % Nothing else to do for undisplayed tasks, move on
@@ -954,21 +974,39 @@ for task_ind = update_ind
 
     stored_pos = [Task.xpos,Task.ypos];
 
-    % update task position and collapse icon
-    if strcmpi(call_option,'normal') && ~isequal(task_panel.Position(1:2),stored_pos)
-        task_panel.Position(1:2) = stored_pos;
-        if collapsable
-            collapse.Position(1:2) = collapse_position(stored_pos,opts);
-        end
-    end
-
     % update priority mover button locations
     if strcmpi(call_option,'normal') && task_panel.Position(2) ~= stored_pos(2)
         % y position
         move_from_btn.Position(2) = Task.PriorityBtnYPos;
         move_to_btn.Position(2)   = Task.PriorityBtnYPos;
     end
-    
+
+    % update task position and collapse icon
+    if strcmpi(call_option,'normal') && ~isequal(task_panel.Position(1:2),stored_pos)
+        % position (origin)
+        task_panel.Position(1:2) = stored_pos;
+
+        % task width adjustment -- slow and annoying, but necessary-ish
+        if task_panel.Position(3) ~= Task.Width
+            % Adjust task button positions on new width, unless task panel
+            % newly drawn (width of 0.5 used ot identiy that (stupid? not
+            % sure)
+            if task_panel.Position(3) ~= 0.5
+                delta = Task.Width - task_panel.Position(3);
+                % adjust icon buttons (all?)
+                for btn_ind = 1:numel(Task.Labels.TaskBtns)
+                    btn = Task.Labels.TaskBtns(btn_ind);
+                    btn.Position(1) = btn.Position(1) + delta;
+                end
+            end
+            task_panel.Position(3) = Task.Width;
+        end
+
+        % adjust collapsable position
+        if collapsable
+            collapse.Position(1:2) = collapse_position(stored_pos,Task.Height,opts);
+        end
+    end
 
     %% Task Color
 
@@ -987,10 +1025,6 @@ for task_ind = update_ind
     if ~strcmpi(desc.FontWeight,DescFontWeight)
         desc.FontWeight = DescFontWeight;
     end
-
-    %% Task Icon Enable
-
-     % ~~~ TBD
 
     %% Task Due Date String 
 
@@ -1089,27 +1123,30 @@ end
 start_xpos = opts.spacer;
 
 % leave room for folder collapse icon only if used
-if any([Tasks(display_ind).isFolder])
+if any([Tasks(display_ind).isFolder] & ~isempty([Tasks(display_ind).SubTasks]))
     start_xpos = start_xpos + opts.collapse_sz;
 end
 
 % init pos vectors
-xpos_vec            = cell(NumTasks,1);
-ypos_vec            = cell(NumTasks,1);
-PriorityBtnYPos_vec = cell(NumTasks,1);
+Vectors.xpos            = cell(NumTasks,1);
+Vectors.ypos            = cell(NumTasks,1);
+Vectors.PriorityBtnYPos = cell(NumTasks,1);
+Vectors.Width           = cell(NumTasks,1);
 
 % set each original task and their subtasks position
 for task_ind = Original_Task_inds
-    [ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec] = set_task_positions(Tasks,task_ind,RankBy,opts,start_xpos,ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec,display_ind);
+    [ypos,Vectors] = set_task_positions(Tasks,task_ind,RankBy,opts,start_xpos,ypos,Vectors,display_ind);
 end
 
 if task_ind == opts.max_num_tasks
-    Tasks(opts.max_num_tasks).xpos = xpos_vec{opts.max_num_tasks};
-    Tasks(opts.max_num_tasks).ypos = ypos_vec{opts.max_num_tasks};
+    Tasks(opts.max_num_tasks).xpos  = Vectors.xpos{opts.max_num_tasks};
+    Tasks(opts.max_num_tasks).ypos  = Vectors.ypos{opts.max_num_tasks};
+    Tasks(opts.max_num_tasks).Width = Vectors.Width{opts.max_num_tasks};
 else
-    [Tasks(1:NumTasks).xpos]               = deal(xpos_vec{:});
-    [Tasks(1:NumTasks).ypos]               = deal(ypos_vec{:});
-    [Tasks(1:NumTasks).PriorityBtnYPos]    = deal(PriorityBtnYPos_vec{:});
+    [Tasks(1:NumTasks).xpos]               = deal(Vectors.xpos{:});
+    [Tasks(1:NumTasks).ypos]               = deal(Vectors.ypos{:});
+    [Tasks(1:NumTasks).PriorityBtnYPos]    = deal(Vectors.PriorityBtnYPos{:});
+    [Tasks(1:NumTasks).Width]              = deal(Vectors.Width{:});
 end
 end
 
@@ -1137,7 +1174,7 @@ if ~UserData.Show.PastDue
     tf = tf & ~[Tasks.PastDue];
 end
 
-tf = tf & [Tasks.Collapsed];
+tf = tf & ~[Tasks.Collapsed];
 end
 
 function Task_inds = order_tasks(Tasks,Task_inds,RankBy)
@@ -1264,9 +1301,7 @@ function p = create_task_panel(f,task_ind,parent,opts)
 %% Create task panel, set constant properties
 
 p = uipanel(parent,'Tag',['Task ',num2str(task_ind)]);
-
-% task width
-p.Position(3) = opts.mover_xpos - opts.spacer - f.UserData.Tasks(task_ind).xpos;
+p.Position(3) = 0.5; % ~~~ hmmm, is this a good idea? it works, but is it good practice? Using value to identify the task panel as being recently created, for adjusting button icon widths
 
 % add labels to panel
 add_task_labels(f,p,task_ind,opts)
@@ -1275,7 +1310,7 @@ add_task_labels(f,p,task_ind,opts)
 add_task_btns(f,p,task_ind,opts)
 end
 
-function [end_ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec] = set_task_positions(Tasks,task_ind,RankBy,opts,xpos,ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec,display_vec)
+function [end_ypos,Vectors] = set_task_positions(Tasks,task_ind,RankBy,opts,xpos,ypos,Vectors,display_vec)
 %% Establish task and sub task positions
 
 Task = Tasks(task_ind);
@@ -1283,9 +1318,10 @@ Task = Tasks(task_ind);
 % Move ypos
 end_ypos = ypos - opts.spacer - Task.Height;
 
-xpos_vec{task_ind} = xpos;
-ypos_vec{task_ind} = end_ypos;
-PriorityBtnYPos_vec{task_ind} = end_ypos + (Task.Height - opts.priority_btn_w)/2;
+Vectors.xpos{task_ind} = xpos;
+Vectors.ypos{task_ind} = end_ypos;
+Vectors.PriorityBtnYPos{task_ind} = end_ypos + (Task.Height - opts.priority_btn_w)/2;
+Vectors.Width{task_ind} = opts.mover_xpos - opts.spacer - xpos;
 
 % Recursive call to subtasks
 subtasks_plot = Task.SubTasks(ismember(Task.SubTasks,display_vec));
@@ -1294,7 +1330,7 @@ if ~isempty(subtasks_plot)
     SubTasks    = order_tasks(Tasks,subtasks_plot,RankBy);    
 
     for ind = SubTasks
-        [end_ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec] = set_task_positions(Tasks,ind,RankBy,opts,xpos,end_ypos,xpos_vec,ypos_vec,PriorityBtnYPos_vec,display_vec);
+        [end_ypos,Vectors] = set_task_positions(Tasks,ind,RankBy,opts,xpos,end_ypos,Vectors,display_vec);
     end
 end
 end
@@ -1316,7 +1352,7 @@ end
 Task = f.UserData.Tasks(task_ind);
 
 % Write description
-lbl_pos = [opts.spacer,0,p.Position(3) - 2*opts.spacer,opts.lbl_h];
+lbl_pos = [opts.spacer,0,Task.Width - 2*opts.spacer,opts.lbl_h];
 uilabel(p,'Position',lbl_pos,'Text',Task.Name,lbl_clr{:},'FontSize',opts.fs,...
     'Tag',['description ',num2str(task_ind)]);
 
@@ -1415,7 +1451,7 @@ Edit.Enable         = true;
 Complete.Tooltip    = 'Complete Task';
 Complete.Icon       = 'checkmark.png';
 Complete.CallBack   = @(~,~)complete_task_wrapper(f,Task_ind,opts);
-Complete.Enable     = true;
+Complete.Enable     = ~isFolder;
 
 Delete.Tooltip      = 'Delete Task';
 Delete.Icon         = 'trash.png';
@@ -1423,16 +1459,21 @@ Delete.CallBack     = @(~,~)delete_task_wrapper(f,Task_ind,opts);
 Delete.Enable       = true; % ~~~ this should change. Or something should. brainstorm. l8r.
 
 Buttons = [Complete,Subtask,Subfolder,Comment,Edit,Delete];
-
-if isFolder
-    % no complete button for folder items
-    Buttons = Buttons(2:end);
-end
+% 
+% if isFolder
+%     % no complete button for folder items
+%     Buttons = Buttons(2:end);
+% end
 
 % positioning
-icons_width = numel(Buttons)*(opts.icon_sz + opts.spacer);
-icon_xpos0  = p.Position(3) - icons_width;
+num_btns    = numel(Buttons);
+icons_width = num_btns*(opts.icon_sz + opts.spacer);
+icon_xpos0  = f.UserData.Tasks(Task_ind).Width - icons_width;
 icon_pos    = [icon_xpos0,opts.spacer,opts.icon_sz,opts.icon_sz];
+
+% initialize graphics place holder array to store buttons to Task Data
+TaskBtns = gobjects(num_btns,1);
+btn_ind = 0;
 
 for Button = Buttons
     b = uibutton(p,'Position',icon_pos,'Text','',...
@@ -1446,9 +1487,14 @@ for Button = Buttons
         b.ButtonPushedFcn = Button.CallBack;
     end
 
+    % store in task
+    btn_ind = btn_ind + 1;
+    TaskBtns(btn_ind) = b;
+
     % Move xpos to the right
     icon_pos(1) = icon_pos(1) + opts.spacer + opts.icon_sz;
 end
+f.UserData.Tasks(Task_ind).Labels.TaskBtns = TaskBtns;
 end
 
 function move_from_btn = add_move_from_button(f,task_ind,parent_panel,opts)
@@ -1774,6 +1820,10 @@ end
 function  Task = add_contingent_attributes(f2,Task,add_task_ind,opts,isFolder)
 %% Add the attributes read from add_task_GUI to new or exisitng task
 
+
+% ~~~ note/question: Assigning PastDue here might be redundant, shouldnt be
+% assessed in rank_task_priority after task creation in update_tasks_panel?
+
 add_task_ind = num2str(add_task_ind);
 
 % Read GUI inputs
@@ -1784,6 +1834,7 @@ if isFolder
     Task.Type = 'One time event';
     Task.DurationStr    = 'N/A';
     Task.DurationVal    = 'N/A';
+    Task.DueDate        = 'N/A';
 else
     % read type, durations, duedates
 
@@ -1803,7 +1854,7 @@ else
         try     % ~~~ try catch is (in my opinion) kinda bad !! can we replace?
             date_str = date_tx.Value{1};
             if  strcmpi(date_str,'n/a')
-                dt = date_str;
+                dt = upper(date_str);
                 Task.PastDue = false;
             else
                 dt = datetime(date_str,'InputFormat',opts.DateFormat); % Display this somewhere! ~~~ Or except other formats!
@@ -2139,6 +2190,8 @@ end
 
 % filer uiobjects out of userdata (dont save 'em)
 UserData = rmv_gui_objects(f.UserData);
+
+% remove "Undo" user data (struct gets too big otherwise)
 if isfield(UserData,'Old')
     UserData = rmfield(UserData,'Old');
 end
@@ -2964,10 +3017,14 @@ f.UserData.Tasks(task_ind).isFolder = ~f.UserData.Tasks(task_ind).isFolder;
 % update tasks. I think here is better, I suppose.
 
 if f.UserData.Tasks(task_ind).isFolder
-    edit_str = 'edit folder';
+    edit_str        = 'edit folder';
+    complete_enable = false;
 else
     edit_str = 'edit task';
+    complete_enable = true;
 end
+
+f.UserData.Tasks(task_ind).Labels.TaskBtns(1).Enable  = complete_enable;
 
 task_edit_btn = findobj(f.UserData.Tasks(task_ind).Labels.Panel,'Tag',['Edit Item ',num2str(task_ind)]);
 task_edit_btn.ButtonPushedFcn = @(~,~)add_task_gui(f,task_ind,opts,edit_str);
@@ -3000,7 +3057,7 @@ else
 end
 end
 
-function add_collapse_icon(f,parent_panel,Task,task_ind,opts)
+function collapse_btn = add_collapse_icon(f,parent_panel,Task,task_ind,opts)
 %% Draw icon for collapsing sub-items of folders
 
 if Task.Collapsing
@@ -3010,8 +3067,8 @@ else
 end
 
 pos = [0,0,opts.collapse_sz,opts.collapse_sz];
-uibutton(parent_panel,'Tag',['Collapse ',num2str(task_ind)],...
-    'Position',pos,'Icon',collapse_icon,...
+collapse_btn = uibutton(parent_panel,'Tag',['Collapse ',num2str(task_ind)],...
+    'Position',pos,'Text','','Icon',collapse_icon,...
     'ButtonPushedFcn',@(self,~)toggle_collapse(f,self,task_ind,opts));
 end
 
@@ -3044,7 +3101,7 @@ autosave_tasks(f,opts)
 f.Pointer = 'arrow';
 end
 
-function pos = collapse_position(panel_pos,opts)
+function pos = collapse_position(panel_pos,Task_Height,opts)
 %% Return collapse icon origin (1x2) from task panel position 
-pos = panel_pos(1:2) - [opts.collapse_sz,(opts.collapse_sz-panel_pos(2))/2];
+pos = panel_pos - [opts.collapse_sz,(opts.collapse_sz-Task_Height)/2];
 end
