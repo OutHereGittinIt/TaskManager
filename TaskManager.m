@@ -587,7 +587,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-       || ~isequal(UserData.CompatabilityVerified,'3/14/2025') 
+       || ~isequal(UserData.CompatabilityVerified,'3/17/2025') 
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')

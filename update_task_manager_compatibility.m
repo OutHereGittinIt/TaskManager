@@ -52,16 +52,22 @@ end
 
 if ~isfield(UserData.Tasks,'Collapsed')
     for ind = 1:UserData.NumTasks
-        UserData.Tasks(ind).isFolder = false;
+        UserData.Tasks(ind).Collapsed = false;
     end
 end
 
 if ~isfield(UserData.Tasks,'Collapsing')
     for ind = 1:UserData.NumTasks
-        UserData.Tasks(ind).isFolder = false;
+        UserData.Tasks(ind).Collapsing = false;
+    end
+end
+
+if ~isfield(UserData.Tasks,'Width')
+    for ind = 1:UserData.NumTasks
+        UserData.Tasks(ind).Width = [];
     end
 end
 
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '3/14/2025';
+UserData.CompatabilityVerified = '3/17/2025';
 end
