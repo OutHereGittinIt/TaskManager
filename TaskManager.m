@@ -936,7 +936,7 @@ for task_ind = update_ind
     if collapsable && isempty(collapse)
         % add collapsable icon if not already added and is appropriate
         collapse = add_collapse_icon(f,parent_panel,Task,task_ind,opts);
-        
+
         % Store this object in userdata
         Task.Labels.Collapse = collapse;
         f.UserData.Tasks(task_ind) = Task;
@@ -950,6 +950,9 @@ for task_ind = update_ind
     % check that (should be) displayed matches visible
     if Task.isDrawn && task_panel.Visible ~= Display_vec(task_ind)
         task_panel.Visible = Display_vec(task_ind);
+        if collapsable
+            collapse.Visible = Display_vec(task_ind);
+        end
     end
 
     if ~Display_vec(task_ind)
@@ -960,10 +963,6 @@ for task_ind = update_ind
             end
             if move_to_btn.Visible
                 move_to_btn.Visible = false;
-            end
-
-            if collapsable
-                collapse.Visible = false;
             end
         end
         % Nothing else to do for undisplayed tasks, move on
@@ -1124,7 +1123,7 @@ start_xpos = opts.spacer;
 
 % leave room for folder collapse icon only if used
 if any([Tasks(display_ind).isFolder] & ~isempty([Tasks(display_ind).SubTasks]))
-    start_xpos = start_xpos + opts.collapse_sz;
+    start_xpos = start_xpos + opts.collapse_sz + opts.spacer;
 end
 
 % init pos vectors
@@ -3066,7 +3065,8 @@ else
     collapse_icon = 'uncollapsed.jpg';
 end
 
-pos = [0,0,opts.collapse_sz,opts.collapse_sz];
+origin = collapse_position([Task.xpos,Task.ypos],Task.Height,opts);
+pos = [origin,opts.collapse_sz,opts.collapse_sz];
 collapse_btn = uibutton(parent_panel,'Tag',['Collapse ',num2str(task_ind)],...
     'Position',pos,'Text','','Icon',collapse_icon,...
     'ButtonPushedFcn',@(self,~)toggle_collapse(f,self,task_ind,opts));
@@ -3078,17 +3078,16 @@ function toggle_collapse(f,self,task_ind,opts)
 f.Pointer = 'watch';
 
 % collapsing on or off boolean
-Collapse = ~f.UserData.Tasks(task_ind).Collapsing;
+Collapsed = ~f.UserData.Tasks(task_ind).Collapsing;
 
 % set collapsing
-f.UserData.Tasks(task_ind).Collapsing = Collapse;
+f.UserData.Tasks(task_ind).Collapsing = Collapsed;
 
-% set sub-item collapsed
-subtasks = f.UserData.Tasks(task_ind).SubTasks;
-[f.UserData.Tasks(subtasks).Collapsed] = Collapse;
+% set sub-item collapsed % ~~~ this needs to be recursive!!
+collapse_subtasks(f,task_ind,Collapsed)
 
 % switch icon
-if Collapse
+if Collapsed
     collapse_icon = 'collapsed.png';
 else
     collapse_icon = 'uncollapsed.jpg';
@@ -3101,7 +3100,21 @@ autosave_tasks(f,opts)
 f.Pointer = 'arrow';
 end
 
+function collapse_subtasks(f,task_ind,Collapsed)
+%% Recursively set collapse flag to task subtasks
+
+subtasks = f.UserData.Tasks(task_ind).SubTasks;
+if isempty(subtasks)
+    return 
+end
+
+for ind  = subtasks
+    f.UserData.Tasks(ind).Collapsed = Collapsed;
+    collapse_subtasks(f,ind,Collapsed)
+end
+end
+
 function pos = collapse_position(panel_pos,Task_Height,opts)
 %% Return collapse icon origin (1x2) from task panel position 
-pos = panel_pos - [opts.collapse_sz,(opts.collapse_sz-Task_Height)/2];
+pos = panel_pos - [opts.collapse_sz + opts.spacer,(opts.collapse_sz-Task_Height)/2];
 end
