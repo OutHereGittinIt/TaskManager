@@ -50,6 +50,36 @@ if ~isfield(UserData.Tasks,'isFolder')
     end
 end
 
+if ~isfield(UserData.Tasks,'Collapsed')
+    for ind = 1:UserData.NumTasks
+        UserData.Tasks(ind).Collapsed = false;
+    end
+end
+
+if ~isfield(UserData.Tasks,'Collapsing')
+    for ind = 1:UserData.NumTasks
+        UserData.Tasks(ind).Collapsing = false;
+    end
+end
+
+if ~isfield(UserData.Tasks,'Width')
+    for ind = 1:UserData.NumTasks
+        UserData.Tasks(ind).Width = [];
+    end
+end
+
+dt = datetime;
+for ind = 1:UserData.NumTasks
+    if UserData.Tasks(ind).Completed && isempty(UserData.Tasks(ind).CompletionDate)
+        UserData.Tasks(ind).CompletionDate = dt;
+    end
+end
+
+if isempty(UserData.Tasks(opts.max_num_tasks).isFolder)
+    UserData.Tasks(opts.max_num_tasks).isFolder = false;
+end
+
+
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '3/2/2025 II';
+UserData.CompatabilityVerified = '3/17/2025 III';
 end
