@@ -126,7 +126,7 @@ opts.chkbx_w        = 150;
 opts.clr_name_w     = 70; %*
 opts.clr_h          = 33; %*
 opts.clr_fs         = 16; %*
-opts.collapse_sz    = 25;
+opts.collapse_sz    = 17;
 opts.data_filename  = 'TaskManager_User_Data.mat';
 opts.DateFormat     = 'MM/dd/uuuu';
 opts.date_lbl_w_s   = 135; %**
@@ -315,7 +315,7 @@ if exist(opts.data_filename,'file')
         counter = 0;
         xpos = 2*opts.spacer + prev_load_w;
         for i = 1:numel(LoadedList)
-            if exist(LoadedList{i},'file')
+            if exist(fullfile(opts.manager_loc,LoadedList{i}),'file')
                 % create load button for previously loaded files
                 uibutton(f,'Text',LoadedList{i},'FontSize',opts.fs,...
                     'Position',[xpos,opts.spacer,file_btn_w,opts.btn_h],...
@@ -574,7 +574,7 @@ function load_task_manager(f,opts,btn)
 if exist('btn','var')
     filename = btn.Text;
 else
-    filename = uigetfile([opts.folder,'/*',opts.ext]);
+    filename = uigetfile([opts.manager_loc,'/*',opts.ext]);
     if filename == 0
         return
     end
@@ -587,7 +587,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-       || ~isequal(UserData.CompatabilityVerified,'3/17/2025') 
+        || ~isequal(UserData.CompatabilityVerified,'3/17/2025 III')
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -884,7 +884,7 @@ Tasks = read_task_position(f.UserData.NumTasks,display_ind,Tasks,RankBy,opts);
 f.UserData.Tasks = Tasks;
 
 % Loop through tasks and check + update all dynamic proprerties
-num_tasks       = numel(update_ind);
+num_tasks       = numel(display_ind);
 num_tasks_drawn = 0;
 
 for task_ind = update_ind
@@ -932,19 +932,6 @@ for task_ind = update_ind
         desc            = Task.Labels.Description;
     end
 
-    % Collapse existence
-    if collapsable && isempty(collapse)
-        % add collapsable icon if not already added and is appropriate
-        collapse = add_collapse_icon(f,parent_panel,Task,task_ind,opts);
-
-        % Store this object in userdata
-        Task.Labels.Collapse = collapse;
-        f.UserData.Tasks(task_ind) = Task;
-    elseif ~collapsable && ~isempty(collapse)
-        % remove collapse icon if already added and no longer appropriate
-        delete(collapse)
-    end
-
     %% Visibility
 
     % check that (should be) displayed matches visible
@@ -967,6 +954,20 @@ for task_ind = update_ind
         end
         % Nothing else to do for undisplayed tasks, move on
         continue
+    end
+
+    %% Collapse existence
+
+    if collapsable && isempty(collapse)
+        % add collapsable icon if not already added and is appropriate
+        collapse = add_collapse_icon(f,parent_panel,Task,task_ind,opts);
+
+        % Store this object in userdata
+        Task.Labels.Collapse = collapse;
+        f.UserData.Tasks(task_ind) = Task;
+    elseif ~collapsable && ~isempty(collapse)
+        % remove collapse icon if already added and no longer appropriate
+        delete(collapse)
     end
 
     %% Task Position
@@ -2138,7 +2139,7 @@ delete_task(f,Task_ind)
 if ~f.UserData.Tasks(Task_ind).isOriginal
     parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
     if isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed
-        f.UserData.Tasks(parent_ind).Completed = true;
+        complete_task(f,parent_ind,opts)
     end
 end
 
@@ -3069,7 +3070,8 @@ origin = collapse_position([Task.xpos,Task.ypos],Task.Height,opts);
 pos = [origin,opts.collapse_sz,opts.collapse_sz];
 collapse_btn = uibutton(parent_panel,'Tag',['Collapse ',num2str(task_ind)],...
     'Position',pos,'Text','','Icon',collapse_icon,...
-    'ButtonPushedFcn',@(self,~)toggle_collapse(f,self,task_ind,opts));
+    'ButtonPushedFcn',@(self,~)toggle_collapse(f,self,task_ind,opts),...
+    'BackgroundColor',opts.task_pan_clr);
 end
 
 function toggle_collapse(f,self,task_ind,opts)

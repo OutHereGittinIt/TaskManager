@@ -68,6 +68,18 @@ if ~isfield(UserData.Tasks,'Width')
     end
 end
 
+dt = datetime;
+for ind = 1:UserData.NumTasks
+    if UserData.Tasks(ind).Completed && isempty(UserData.Tasks(ind).CompletionDate)
+        UserData.Tasks(ind).CompletionDate = dt;
+    end
+end
+
+if isempty(UserData.Tasks(opts.max_num_tasks).isFolder)
+    UserData.Tasks(opts.max_num_tasks).isFolder = false;
+end
+
+
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '3/17/2025';
+UserData.CompatabilityVerified = '3/17/2025 III';
 end
