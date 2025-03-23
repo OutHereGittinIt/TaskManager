@@ -23,19 +23,7 @@ function TaskManager
 % new features and just dramatically imporved performance (especially on
 % this slow computer), so good things are happening.
 
-% Integrate all of these into the task manager!
-
-% - Have a way to 'uncomplete task', either icon toggle or in edit      [next]
-
-% - "Smart centerfig" only as necessary (screen exceeded)               [test]
-
-% - should delete icon be state button? OR un-delete in edit            [next]
-
-% - fix the goddamn drop down for ongoing task duration                 [next]
-
 % - use uidatepicker for add/edit task gui and beautify the subfigure   [next]
-
-% - In shared function, place uiswitch properly(wait for outerposition) [next]
 
 %% Questions / debug (not features)
 
@@ -46,50 +34,6 @@ function TaskManager
 % answered. Close --> closerequestfcn --> delete
 
 % - ongoing due dates are printing incorrectly
-
-%% Lesson learned :
-
-% (almost) NEVER use regular figure resizing. In this case, for ex, instead
-% start with scrollable large pannel. Isnt that heplful to have smaller
-% figure & panel for less than scrollable number of tasks. Because once its
-% scrollabel of course the figure size donest change anymore. CHanging the
-% figure size and component arrangement is wayyy unnecessary and
-% clunky. Welp. What are ya gonna do.
-
-%% Performance Research Project (PRP)
-
-% using profile viewer. Looks like most of the actual time consumption is
-% outside of my control. Partially good because that means we arent
-% creating inefficiencies (pat on the back) but bad because we dont have
-% much room to improve unless we change fundamentally.
-
-% One option is the deleting and recreatig of task panels. Often times you
-% just need to move the panel, and it will do the rest. You may need to
-% reset task icon functions? I dont know likely not
-
-% We need to determine what needs to be updated on a redraw.
-
-% some obvious things:
-% - task position within tasks panel
-% - time sensitive  ("refresh")
-%   - urgency ranking + color application
-%   - next due date for reoccurring (considering getting rid of)
-% - apply task layout to labels based on check
-% - check complete enable 
-% - Comment Icon (w/ or w/o red dot) <-- should be handled in edit_comment
-
-% obviously not changing
-% - non-comment icons
-% - tooltips
-% - read task layout <-- should be handled upon adjustment??? No. Because
-% of conditional label usage. Which is a little bit dumb. But whatever.
-
-% Update_tasks_panel will detect all necessary GUI property changes and
-% implement them. This includes from lists above : 
-% - position
-% - urgency ranking + color
-% - (read AND check) task layout
-% - completion (check)
 
 %% When to autosave -- Feel free to modify
 
