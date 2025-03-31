@@ -96,7 +96,7 @@ opts.OptionalFieldsConditions = {...
 
 % Default settings :
 
-opts.DefaultSettings.Autosave               = false;
+opts.DefaultSettings.Autosave               = true;
 opts.DefaultSettings.complete_clr           = [.8,1,.8];
 opts.DefaultSettings.CompletionMode         = 'by subtask';
 opts.DefaultSettings.default_clr            = [.85,.7,.71];
