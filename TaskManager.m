@@ -1,39 +1,14 @@
 function TaskManager
 %
-% Record Single-event and Ongoing Tasks and Manage Status
+% Record Tasks and Manage Status
 %
 % David Richardson
 % 11/11/2023
-
-% 11/16/2023 : Working pretty well! Need to redraw task instead of redraw
-% figure. Want to save to multiple files (AND autosave)+ load instead of
-% current
-
-% 11/24/2023 : Got a little obsessive with the settings and editable color
-% ranges, but they're working and very cool! Only need to add the
-% 'delete/add limits' options there (simple buttons). Still want to save to
-% multiple files AND still want to redraw only task, as above.
-
-% 12/2/2023 : Lookin good! Still some stuff I want to do. Could do a lot of
-% work and making it prettier. Add some banners! also we need to edit the
-% way we're doing the optoins struct becuase its getting really confusing.
-% Definitely needs more commenting
-
-% 7/31/2024 : Using this way more than I thought I would. Still adding some
-% new features and just dramatically imporved performance (especially on
-% this slow computer), so good things are happening.
-
-% - use uidatepicker for add/edit task gui and beautify the subfigure   [next]
 
 %% Questions / debug (not features)
 
 % - f.Pointer is not working properly!! have to move mouse to go back to
 % arrow. This is a very bad look
-
-% - Should I be executing close(f2) or delete(f2) for subfigures ???
-% answered. Close --> closerequestfcn --> delete
-
-% - ongoing due dates are printing incorrectly
 
 %% When to autosave -- Feel free to modify
 
@@ -129,7 +104,7 @@ opts.DefaultSettings.folder_clr             = [.906,.788,.663];
 opts.DefaultSettings.incomplete_clr         = [.89,.68,.49];
 opts.DefaultSettings.Limits                 = DefaultLimits;
 opts.DefaultSettings.pastdue_clr            = [250,240,238]/255;
-opts.DefaultSettings.DescFontWeight         = 'bold';
+opts.DefaultSettings.DescFontWeight         = 'normal';
 opts.DefaultSettings.RankBy                 = 'Due Date';
 opts.DefaultSettings.Show.Completed         = true;
 opts.DefaultSettings.Show.Deleted           = false;
@@ -137,8 +112,8 @@ opts.DefaultSettings.Show.PastDue           = true;
 opts.DefaultSettings.Show.CompletionDate    = true;
 opts.DefaultSettings.Show.CreationDate      = true; 
 opts.DefaultSettings.Show.DueDate           = true;
-opts.DefaultSettings.Show.Regularity        = true;
-opts.DefaultSettings.Show.Type              = true;
+opts.DefaultSettings.Show.Regularity        = false;
+opts.DefaultSettings.Show.Type              = false;
 
 num_btns = 7; % ~~~ read from function
 
@@ -181,7 +156,7 @@ opts.folder         = fileparts(mfilename("fullpath"));
 opts.data_filename  = fullfile(opts.folder,opts.data_filename);
 opts.manager_loc    = fullfile(opts.folder,'Managers');
 if ~isfolder(opts.manager_loc)
-    mk_dir(opts.manager_loc)
+    mkdir(opts.manager_loc)
 end
 
 % X-position of color objects in 'Colors' settings option
@@ -195,6 +170,11 @@ opts.icon_objects_x0 = opts.color_objects_x0 + opts.clr_h + 4*opts.spacer...
 opts.mover_xpos = opts.task_pan_w - opts.spacer - opts.priority_btn_w - opts.scrollbar_w;
 
 %% Main
+
+% add paths as necessary
+p = genpath(opts.folder);
+addpath(p)
+
 dbstop if error
 disp('launching Task Manager Main Menu...')
 MainMenu(opts)
@@ -738,11 +718,11 @@ if f.UserData.NumTasks == 0
         'HorizontalAlignment','center','VerticalAlignment','center');
 else
     % redeclare drawn status
-    f.UserData = clear_UserData(f.UserData,opts);
-
-    % redraw panel to display the tasks
-    update_tasks_panel(f,opts,'normal',pgb)
+    f.UserData = clear_UserData_isDrawn(f.UserData,opts);
 end
+
+% redraw panel to display the tasks
+update_tasks_panel(f,opts,'normal',pgb)
 end
 
 function update_tasks_panel(f,opts,call_option,pgb)
@@ -794,6 +774,11 @@ switch call_option
             catch
                 disp(' no add tasks label for no tasks displayable ~~~ fix this please')
             end
+            
+            % show zeros on stats panel
+            update_stats_pan(f)
+            
+            % return
             parent_panel.Visible = true;
             f.Pointer = 'arrow';drawnow
             return
@@ -930,26 +915,26 @@ for task_ind = update_ind
         % position (origin)
         task_panel.Position(1:2) = stored_pos;
 
-        % task width adjustment -- slow and annoying, but necessary-ish
-        if task_panel.Position(3) ~= Task.Width
-            % Adjust task button positions on new width, unless task panel
-            % newly drawn (width of 0.5 used ot identiy that (stupid? not
-            % sure)
-            if task_panel.Position(3) ~= 0.5
-                delta = Task.Width - task_panel.Position(3);
-                % adjust icon buttons (all?)
-                for btn_ind = 1:numel(Task.Labels.TaskBtns)
-                    btn = Task.Labels.TaskBtns(btn_ind);
-                    btn.Position(1) = btn.Position(1) + delta;
-                end
-            end
-            task_panel.Position(3) = Task.Width;
-        end
-
         % adjust collapsable position
         if collapsable
             collapse.Position(1:2) = collapse_position(stored_pos,Task.Height,opts);
         end
+    end
+
+    % task width adjustment -- slow and annoying, but necessary-ish
+    if task_panel.Position(3) ~= Task.Width
+        % Adjust task button positions on new width, unless task panel
+        % newly drawn (width of 0.5 used ot identiy that (stupid? not
+        % sure)
+        if task_panel.Position(3) ~= 0.5
+            delta = Task.Width - task_panel.Position(3);
+            % adjust icon buttons (all?)
+            for btn_ind = 1:numel(Task.Labels.TaskBtns)
+                btn = Task.Labels.TaskBtns(btn_ind);
+                btn.Position(1) = btn.Position(1) + delta;
+            end
+        end
+        task_panel.Position(3) = Task.Width;
     end
 
     %% Task Color
@@ -2199,7 +2184,7 @@ function create_settings_subfigure(f,opts)
 %% Display Settings GUI to adjust various options grouped in tabs
 
 % options
-subfig_sz   = [650,500];
+subfig_sz   = [775,500];
 tab_w       = 110;
 tab_h       = 65;
 tab_FS      = 13;
@@ -2924,12 +2909,11 @@ UserData.Old = UserData;
 % any longer. Just FYI.
 end
 
-function UserData = clear_UserData(UserData,opts)
+function UserData = clear_UserData_isDrawn(UserData,opts)
 %% Declare isDrawn false for all tasks upon reloading figure
-for i = 1:UserData.NumTasks
+for i = [1:UserData.NumTasks,opts.max_num_tasks]
     UserData.Tasks(i).isDrawn = false;
 end
-UserData.Tasks(opts.max_num_tasks).isDrawn = false;
 end
 
 function quick_comment_close(f,Task_ind,opts,event)
