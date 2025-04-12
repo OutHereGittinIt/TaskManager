@@ -3009,7 +3009,7 @@ Collapsed = ~f.UserData.Tasks(task_ind).Collapsing;
 % set collapsing
 f.UserData.Tasks(task_ind).Collapsing = Collapsed;
 
-% set sub-item collapsed % ~~~ this needs to be recursive!!
+% set sub-item collapsed
 collapse_subtasks(f,task_ind,Collapsed)
 
 % switch icon
@@ -3036,7 +3036,11 @@ end
 
 for ind  = subtasks
     f.UserData.Tasks(ind).Collapsed = Collapsed;
-    collapse_subtasks(f,ind,Collapsed)
+
+    % collapse recursive (except for collapsing)
+    if ~f.UserData.Tasks(ind).Collapsing
+        collapse_subtasks(f,ind,Collapsed)
+    end
 end
 end
 
