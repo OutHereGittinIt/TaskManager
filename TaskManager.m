@@ -657,8 +657,6 @@ uidropdown(p,'Items',{'Due Date','Date Created','Date Completed','Custom'},...
 ypos = ypos - opts.spacer - opts.btn_h;
 uilabel(p,'Text','Show Tasks:','FontSize',opts.fs,...
     'Position',[opts.spacer,ypos,opts.chkbx_w,opts.btn_h]);
-% ~~~ Should I add an 'all' option? Maybe if we move beyond three options,
-% I like where your head is at though
 
 Text = ["Completed","Past Due","Deleted"];
 Value_field = replace(Text,' ','');
@@ -772,7 +770,7 @@ switch call_option
             try
                 lbl_obj.Visible = true;
             catch
-                disp(' no add tasks label for no tasks displayable ~~~ fix this please')
+                disp('no add tasks label for no tasks displayable')
             end
             
             % show zeros on stats panel
@@ -807,9 +805,7 @@ Tasks = read_task_layout(f,Tasks,display_ind,opts);
 % Determine task positions
 Tasks = read_task_position(f.UserData.NumTasks,display_ind,Tasks,RankBy,opts);
 
-% store read task data ~~~ ( do I actually need to do this? will re-read
-% anyway)
-
+% store read and ranked data
 f.UserData.Tasks = Tasks;
 
 % Loop through tasks and check + update all dynamic proprerties
@@ -1007,9 +1003,8 @@ for task_ind = update_ind
             move_from_btn.Visible = strcmpi(RankBy,'Custom');
         end
         
-        % set enable on the off chane that update called while button
-        % enabled. ~~~ this could be better in theory, not sure how big
-        % that payoff is though
+        % set enable on the off chance that update called while button
+        % enabled.
         if ~move_from_btn.Enable && strcmpi(RankBy,'Custom')
             move_from_btn.Enable = true;
         end
@@ -1221,8 +1216,7 @@ end
 
 function Duration = months(num_weeks)
 %% Function to use weeks as duration method
-% ~~~ lol this is fine for now but has to be updated to mm1/dd --> mm1+1/dd
-% unless mm1 == 12 ... is there not a predefined function?
+% ~~~ lol this is just a weak approximation for now. 
 Duration = 31*days(num_weeks);
 end
 
