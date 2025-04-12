@@ -100,6 +100,7 @@ opts.DefaultSettings.Autosave               = true;
 opts.DefaultSettings.complete_clr           = [.8,1,.8];
 opts.DefaultSettings.CompletionMode         = 'by subtask';
 opts.DefaultSettings.default_clr            = [.85,.7,.71];
+opts.DefaultSettings.deleted_clr            = [.82,.82,.82];
 opts.DefaultSettings.folder_clr             = [.98,.96,.65];
 opts.DefaultSettings.incomplete_clr         = [.89,.68,.49];
 opts.DefaultSettings.Limits                 = DefaultLimits;
@@ -511,7 +512,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-        || ~isequal(UserData.CompatabilityVerified,'3/17/2025 III')
+        || ~isequal(UserData.CompatabilityVerified,'4/11/2025')
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -1128,10 +1129,16 @@ end
 function Tasks = rank_urgency(f,task_inds)
 %% Set Color / status for for a given task
 
+% ~~~ the "UrgencyLevel" calculation needs to be re-written here. Very
+% weird and confusing now
+
+% ~~~ this level of brevity is kinda unnecassary. Can remove now
+
 UserData        = f.UserData;
 Limits          = UserData.Limits; % brevity
 Tasks           = UserData.Tasks;   % brevity
 complete_clr    = UserData.complete_clr;
+deleted_clr     = UserData.deleted_clr;
 incomplete_clr  = UserData.incomplete_clr;
 folder_clr      = UserData.folder_clr;
 num_Limits      = numel(UserData.DurationLimits);
@@ -1143,7 +1150,11 @@ Color       = PastDue;
 for i = 1:num_tasks
 
     task_ind = task_inds(i);
-    if strcmpi(Tasks(task_ind).Type,'Ongoing')
+    if Tasks(task_ind).Deleted
+        UrgencyLevel    = 0; % ~~~ fix. not really right (same as PastDue)
+        panel_clr       = deleted_clr;
+        use_duedate     = false;
+    elseif strcmpi(Tasks(task_ind).Type,'Ongoing')
         % (Ongoing)
         % Calculate Due Date from regularity and Completion OR Creation Date
         if Tasks(task_ind).Completed
@@ -2054,12 +2065,13 @@ f.Pointer = 'watch'; drawnow
 f.UserData = store_previous_tasks(f.UserData);
 
 % original call with recursive calls
-delete_task(f,Task_ind)
+toggle_delete_task(f,Task_ind)
 
 % Complete parent task if exists and folder that is not complete
 if ~f.UserData.Tasks(Task_ind).isOriginal
     parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
-    if isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed
+    if (isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed)...
+            || (~isComplete_folder(f,parent_ind) && f.UserData.Tasks(parent_ind).Completed)
         complete_task(f,parent_ind,opts)
     end
 end
@@ -2073,11 +2085,11 @@ autosave_tasks(f,opts)
 f.Pointer = 'arrow'; drawnow
 end
 
-function delete_task(f,Task_ind)
+function toggle_delete_task(f,Task_ind)
 %% Delete task and subtasks
-f.UserData.Tasks(Task_ind).Deleted = true;
+f.UserData.Tasks(Task_ind).Deleted = ~f.UserData.Tasks(Task_ind).Deleted;
 for ind = f.UserData.Tasks(Task_ind).SubTasks 
-    delete_task(f,ind)
+    toggle_delete_task(f,ind)
 end
 end
 
@@ -2326,6 +2338,7 @@ add_color_limits(f,f2,opts);
 add_color_line(f,f2,'PastDue',opts)
 add_color_line(f,f2,'Default',opts);
 add_color_line(f,f2,'Folder',opts);
+add_color_line(f,f2,'Deleted',opts);
 end
 
 function add_color_line(f,f2,Color_Name,opts,limits_ind)
