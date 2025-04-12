@@ -855,6 +855,7 @@ for task_ind = update_ind
         move_to_btn     = Task.Labels.MoveTo;
         collapse        = Task.Labels.Collapse;
         desc            = Task.Labels.Description;
+        date_str        = Task.Labels.DueDate;
     end
 
     %% Visibility
@@ -953,7 +954,9 @@ for task_ind = update_ind
 
     %% Task Due Date String 
 
-    % ~~~ TBD
+    if ~strcmpi(date_str.Text,DueDate_lbl_str(Task,opts))
+        date_str.Text = DueDate_lbl_str(Task,opts);
+    end
 
     %% Task Layout
 
@@ -1320,12 +1323,7 @@ uilabel(p,'Position',lbl_pos,'Text',lbl_str,lbl_clr{:},'FontSize',opts.fs,...
 lbl_pos(1) = lbl_pos(1) - 50;
 
 % Write Due Date
-if isdatetime(Task.DueDate)
-    datestr = char(Task.DueDate,opts.DateFormat);
-else
-    datestr = Task.DueDate;
-end
-lbl_str = ['Due Date: ',datestr];
+lbl_str = DueDate_lbl_str(Task,opts);
 lbl_pos(2) = Task.DueDateHeight;
 uilabel(p,'Position',lbl_pos,'Text',lbl_str,lbl_clr{:},'FontSize',opts.fs,...
     'Tag',['Due Date ',num2str(task_ind)]);
@@ -2857,13 +2855,17 @@ end
 function Task = store_task_objects(parent_panel,Task,task_ind,opts)
 %% Store various uiobjects to user data tasks strcut array to reference quickly for update
 
-% ~~~ is this stupid?? I feel like it may be
+% ~~~ is this stupid?? I feel like it may be. COuldnt this be done in task
+% drawing? I think it should be lol
 
 % panel
 Task.Labels.Panel = findobj(parent_panel,'Tag',['Task ',num2str(task_ind)]);
 
 % description
 Task.Labels.Description = findobj(parent_panel,'Tag',['description ',num2str(task_ind)]);
+
+% due date
+Task.Labels.DueDate = findobj(parent_panel,'Tag',['Due Date ',num2str(task_ind)]);
 
 % move to
 Task.Labels.MoveTo = findobj(parent_panel,'Tag',['Move to ',num2str(task_ind)]);
@@ -3041,4 +3043,15 @@ end
 function pos = collapse_position(panel_pos,Task_Height,opts)
 %% Return collapse icon origin (1x2) from task panel position 
 pos = panel_pos - [opts.collapse_sz + opts.spacer,(opts.collapse_sz-Task_Height)/2];
+end
+
+function lbl_str = DueDate_lbl_str(Task,opts)
+%% Return the exact string used fo rhte uilabel for a given task
+
+if isdatetime(Task.DueDate)
+    datestr = char(Task.DueDate,opts.DateFormat);
+else
+    datestr = Task.DueDate;
+end
+lbl_str = ['Due Date: ',datestr];
 end
