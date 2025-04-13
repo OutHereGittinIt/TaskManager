@@ -68,18 +68,22 @@ if ~isfield(UserData.Tasks,'Width')
     end
 end
 
-dt = datetime;
-for ind = 1:UserData.NumTasks
-    if UserData.Tasks(ind).Completed && isempty(UserData.Tasks(ind).CompletionDate)
-        UserData.Tasks(ind).CompletionDate = dt;
-    end
-end
+% dt = datetime;
+% for ind = 1:UserData.NumTasks
+%     if UserData.Tasks(ind).Completed && isempty(UserData.Tasks(ind).CompletionDate)
+%         UserData.Tasks(ind).CompletionDate = dt;
+%     end
+% end
+% 
+% if isempty(UserData.Tasks(opts.max_num_tasks).isFolder)
+%     UserData.Tasks(opts.max_num_tasks).isFolder = false;
+% end
 
-if isempty(UserData.Tasks(opts.max_num_tasks).isFolder)
-    UserData.Tasks(opts.max_num_tasks).isFolder = false;
-end
 
+if ~isfield(UserData,'deleted_clr')
+    UserData.deleted_clr = opts.DefaultSettings.deleted_clr;
+end
 
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '3/17/2025 III';
+UserData.CompatabilityVerified = '4/11/2025';
 end

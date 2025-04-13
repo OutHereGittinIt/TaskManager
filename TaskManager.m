@@ -100,6 +100,7 @@ opts.DefaultSettings.Autosave               = true;
 opts.DefaultSettings.complete_clr           = [.8,1,.8];
 opts.DefaultSettings.CompletionMode         = 'by subtask';
 opts.DefaultSettings.default_clr            = [.85,.7,.71];
+opts.DefaultSettings.deleted_clr            = [.82,.82,.82];
 opts.DefaultSettings.folder_clr             = [.98,.96,.65];
 opts.DefaultSettings.incomplete_clr         = [.89,.68,.49];
 opts.DefaultSettings.Limits                 = DefaultLimits;
@@ -358,7 +359,8 @@ end
 warning on
 
 % ~~~ there must be a better way to do this
-fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr',...
+% ~~~ emphasizing ^
+fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr','deleted_clr',...
     'pastdue_clr','CompletionMode','Show','DescFontWeight','RankBy','Autosave'};
 for field = fields
     f.UserData.(field{1}) = default_struct.(field{1});
@@ -511,7 +513,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-        || ~isequal(UserData.CompatabilityVerified,'3/17/2025 III')
+        || ~isequal(UserData.CompatabilityVerified,'4/11/2025')
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -558,6 +560,8 @@ f.UserData = rmfield(f.UserData,'y0');
 
 % remove progress bar
 delete(pgb)
+
+focus(f)
 end
 
 function add_title_panel(f,opts)
@@ -855,6 +859,7 @@ for task_ind = update_ind
         move_to_btn     = Task.Labels.MoveTo;
         collapse        = Task.Labels.Collapse;
         desc            = Task.Labels.Description;
+        date_str        = Task.Labels.DueDate;
     end
 
     %% Visibility
@@ -953,7 +958,9 @@ for task_ind = update_ind
 
     %% Task Due Date String 
 
-    % ~~~ TBD
+    if ~strcmpi(date_str.Text,DueDate_lbl_str(Task,opts))
+        date_str.Text = DueDate_lbl_str(Task,opts);
+    end
 
     %% Task Layout
 
@@ -1125,10 +1132,16 @@ end
 function Tasks = rank_urgency(f,task_inds)
 %% Set Color / status for for a given task
 
+% ~~~ the "UrgencyLevel" calculation needs to be re-written here. Very
+% weird and confusing now
+
+% ~~~ this level of brevity is kinda unnecassary. Can remove now
+
 UserData        = f.UserData;
 Limits          = UserData.Limits; % brevity
 Tasks           = UserData.Tasks;   % brevity
 complete_clr    = UserData.complete_clr;
+deleted_clr     = UserData.deleted_clr;
 incomplete_clr  = UserData.incomplete_clr;
 folder_clr      = UserData.folder_clr;
 num_Limits      = numel(UserData.DurationLimits);
@@ -1140,7 +1153,12 @@ Color       = PastDue;
 for i = 1:num_tasks
 
     task_ind = task_inds(i);
-    if strcmpi(Tasks(task_ind).Type,'Ongoing')
+    if Tasks(task_ind).Deleted
+        % (Deleted, displayed)
+        UrgencyLevel    = num_Limits + 2;
+        panel_clr       = deleted_clr;
+        use_duedate     = false;
+    elseif strcmpi(Tasks(task_ind).Type,'Ongoing')
         % (Ongoing)
         % Calculate Due Date from regularity and Completion OR Creation Date
         if Tasks(task_ind).Completed
@@ -1320,12 +1338,7 @@ uilabel(p,'Position',lbl_pos,'Text',lbl_str,lbl_clr{:},'FontSize',opts.fs,...
 lbl_pos(1) = lbl_pos(1) - 50;
 
 % Write Due Date
-if isdatetime(Task.DueDate)
-    datestr = char(Task.DueDate,opts.DateFormat);
-else
-    datestr = Task.DueDate;
-end
-lbl_str = ['Due Date: ',datestr];
+lbl_str = DueDate_lbl_str(Task,opts);
 lbl_pos(2) = Task.DueDateHeight;
 uilabel(p,'Position',lbl_pos,'Text',lbl_str,lbl_clr{:},'FontSize',opts.fs,...
     'Tag',['Due Date ',num2str(task_ind)]);
@@ -1378,7 +1391,7 @@ Complete.Enable     = ~isFolder;
 
 Delete.Tooltip      = 'Delete Task';
 Delete.Icon         = 'trash.png';
-Delete.CallBack     = @(~,~)delete_task_wrapper(f,Task_ind,opts);
+Delete.CallBack     = @(~,~)toggle_delete_task_wrapper(f,Task_ind,opts);
 Delete.Enable       = true; % ~~~ this should change. Or something should. brainstorm. l8r.
 
 Buttons = [Complete,Subtask,Subfolder,Comment,Edit,Delete];
@@ -1476,7 +1489,7 @@ end
 
 % Add escape key callback to go back to moving task selector
 f.WindowKeyPressFcn = @(f,key)Escape_move_mode(f,key,other_mover_btns,btn);
-figure(f) % ~~~ this doesnt work, unfortunately
+focus(f)
 end
 
 function Escape_move_mode(f,key,other_mover_btns,btn)
@@ -2048,7 +2061,7 @@ if ~f.UserData.Tasks(Task_ind).isOriginal
 end
 end
 
-function delete_task_wrapper(f,Task_ind,opts)
+function toggle_delete_task_wrapper(f,Task_ind,opts)
 %% Wrapper function for delete_task (so we only redraw and save once)
 f.Pointer = 'watch'; drawnow
 
@@ -2056,12 +2069,13 @@ f.Pointer = 'watch'; drawnow
 f.UserData = store_previous_tasks(f.UserData);
 
 % original call with recursive calls
-delete_task(f,Task_ind)
+toggle_delete_task(f,Task_ind)
 
 % Complete parent task if exists and folder that is not complete
 if ~f.UserData.Tasks(Task_ind).isOriginal
     parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
-    if isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed
+    if (isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed)...
+            || (~isComplete_folder(f,parent_ind) && f.UserData.Tasks(parent_ind).Completed)
         complete_task(f,parent_ind,opts)
     end
 end
@@ -2075,11 +2089,24 @@ autosave_tasks(f,opts)
 f.Pointer = 'arrow'; drawnow
 end
 
-function delete_task(f,Task_ind)
+function toggle_delete_task(f,Task_ind)
 %% Delete task and subtasks
-f.UserData.Tasks(Task_ind).Deleted = true;
+
+% switch delete state of task item
+delete_state = ~f.UserData.Tasks(Task_ind).Deleted;
+
+f.UserData.Tasks(Task_ind).Deleted = delete_state;
+
+% Reflect delete state in icon 
+if delete_state
+    delete_icon = 'undelete.jpg';
+else
+    delete_icon = 'trash.png';
+end
+f.UserData.Tasks(Task_ind).Labels.TaskBtns(end).Icon = delete_icon;
+
 for ind = f.UserData.Tasks(Task_ind).SubTasks 
-    delete_task(f,ind)
+    toggle_delete_task(f,ind)
 end
 end
 
@@ -2328,6 +2355,7 @@ add_color_limits(f,f2,opts);
 add_color_line(f,f2,'PastDue',opts)
 add_color_line(f,f2,'Default',opts);
 add_color_line(f,f2,'Folder',opts);
+add_color_line(f,f2,'Deleted',opts);
 end
 
 function add_color_line(f,f2,Color_Name,opts,limits_ind)
@@ -2857,13 +2885,17 @@ end
 function Task = store_task_objects(parent_panel,Task,task_ind,opts)
 %% Store various uiobjects to user data tasks strcut array to reference quickly for update
 
-% ~~~ is this stupid?? I feel like it may be
+% ~~~ is this stupid?? I feel like it may be. COuldnt this be done in task
+% drawing? I think it should be lol
 
 % panel
 Task.Labels.Panel = findobj(parent_panel,'Tag',['Task ',num2str(task_ind)]);
 
 % description
 Task.Labels.Description = findobj(parent_panel,'Tag',['description ',num2str(task_ind)]);
+
+% due date
+Task.Labels.DueDate = findobj(parent_panel,'Tag',['Due Date ',num2str(task_ind)]);
 
 % move to
 Task.Labels.MoveTo = findobj(parent_panel,'Tag',['Move to ',num2str(task_ind)]);
@@ -3007,7 +3039,7 @@ Collapsed = ~f.UserData.Tasks(task_ind).Collapsing;
 % set collapsing
 f.UserData.Tasks(task_ind).Collapsing = Collapsed;
 
-% set sub-item collapsed % ~~~ this needs to be recursive!!
+% set sub-item collapsed
 collapse_subtasks(f,task_ind,Collapsed)
 
 % switch icon
@@ -3034,11 +3066,26 @@ end
 
 for ind  = subtasks
     f.UserData.Tasks(ind).Collapsed = Collapsed;
-    collapse_subtasks(f,ind,Collapsed)
+
+    % collapse recursive (except for collapsing)
+    if ~f.UserData.Tasks(ind).Collapsing
+        collapse_subtasks(f,ind,Collapsed)
+    end
 end
 end
 
 function pos = collapse_position(panel_pos,Task_Height,opts)
 %% Return collapse icon origin (1x2) from task panel position 
 pos = panel_pos - [opts.collapse_sz + opts.spacer,(opts.collapse_sz-Task_Height)/2];
+end
+
+function lbl_str = DueDate_lbl_str(Task,opts)
+%% Return the exact string used fo rhte uilabel for a given task
+
+if isdatetime(Task.DueDate)
+    datestr = char(Task.DueDate,opts.DateFormat);
+else
+    datestr = Task.DueDate;
+end
+lbl_str = ['Due Date: ',datestr];
 end
