@@ -359,7 +359,8 @@ end
 warning on
 
 % ~~~ there must be a better way to do this
-fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr',...
+% ~~~ emphasizing ^
+fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr','deleted_clr',...
     'pastdue_clr','CompletionMode','Show','DescFontWeight','RankBy','Autosave'};
 for field = fields
     f.UserData.(field{1}) = default_struct.(field{1});
@@ -559,6 +560,8 @@ f.UserData = rmfield(f.UserData,'y0');
 
 % remove progress bar
 delete(pgb)
+
+focus(f)
 end
 
 function add_title_panel(f,opts)
@@ -1151,7 +1154,8 @@ for i = 1:num_tasks
 
     task_ind = task_inds(i);
     if Tasks(task_ind).Deleted
-        UrgencyLevel    = 0; % ~~~ fix. not really right (same as PastDue)
+        % (Deleted, displayed)
+        UrgencyLevel    = num_Limits + 2;
         panel_clr       = deleted_clr;
         use_duedate     = false;
     elseif strcmpi(Tasks(task_ind).Type,'Ongoing')
@@ -1387,7 +1391,7 @@ Complete.Enable     = ~isFolder;
 
 Delete.Tooltip      = 'Delete Task';
 Delete.Icon         = 'trash.png';
-Delete.CallBack     = @(~,~)delete_task_wrapper(f,Task_ind,opts);
+Delete.CallBack     = @(~,~)toggle_delete_task_wrapper(f,Task_ind,opts);
 Delete.Enable       = true; % ~~~ this should change. Or something should. brainstorm. l8r.
 
 Buttons = [Complete,Subtask,Subfolder,Comment,Edit,Delete];
@@ -1485,7 +1489,7 @@ end
 
 % Add escape key callback to go back to moving task selector
 f.WindowKeyPressFcn = @(f,key)Escape_move_mode(f,key,other_mover_btns,btn);
-figure(f) % ~~~ this doesnt work, unfortunately
+focus(f)
 end
 
 function Escape_move_mode(f,key,other_mover_btns,btn)
@@ -2057,7 +2061,7 @@ if ~f.UserData.Tasks(Task_ind).isOriginal
 end
 end
 
-function delete_task_wrapper(f,Task_ind,opts)
+function toggle_delete_task_wrapper(f,Task_ind,opts)
 %% Wrapper function for delete_task (so we only redraw and save once)
 f.Pointer = 'watch'; drawnow
 
@@ -2087,7 +2091,20 @@ end
 
 function toggle_delete_task(f,Task_ind)
 %% Delete task and subtasks
-f.UserData.Tasks(Task_ind).Deleted = ~f.UserData.Tasks(Task_ind).Deleted;
+
+% switch delete state of task item
+delete_state = ~f.UserData.Tasks(Task_ind).Deleted;
+
+f.UserData.Tasks(Task_ind).Deleted = delete_state;
+
+% Reflect delete state in icon 
+if delete_state
+    delete_icon = 'undelete.jpg';
+else
+    delete_icon = 'trash.png';
+end
+f.UserData.Tasks(Task_ind).Labels.TaskBtns(end).Icon = delete_icon;
+
 for ind = f.UserData.Tasks(Task_ind).SubTasks 
     toggle_delete_task(f,ind)
 end
