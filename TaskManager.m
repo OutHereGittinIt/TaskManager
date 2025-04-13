@@ -1313,11 +1313,8 @@ uilabel(p,'Position',lbl_pos,'Text',Task.Type,lbl_clr{:},'FontSize',opts.fs,...
     'Tag',['Type ',num2str(task_ind)]);
 
 % Write completion date
-if Task.Completed
-    lbl_str = completed_task_string(Task,opts);
-else
-    lbl_str = 'incomplete';
-end
+lbl_str = completed_task_string(Task,opts);
+
 if strcmp(Task.Type,'Ongoing')
     lbl_str = ['Last ',lbl_str];
 end
@@ -1346,7 +1343,11 @@ end
 
 function string = completed_task_string(Task,opts)
 %% Returns string for label object with task completion date 
-string = ['Completed ',char(Task.CompletionDate,opts.DateFormat)];
+if Task.Completed
+    string = ['Completed ',char(Task.CompletionDate,opts.DateFormat)];
+else
+    string = 'Incomplete';
+end
 end
 
 function add_task_btns(f,p,Task_ind,opts)
@@ -1360,46 +1361,52 @@ else
 end
 
 % Define all of the task icon buttons
+
+% Comment
 Comment.Tooltip     = 'Add Comment';
 Comment.CallBack    = @(~,~)edit_comment(f,Task_ind,opts);
-Comment.Enable      = true;
+Comment.Visible      = true;
 if isempty(f.UserData.Tasks(Task_ind).Comment)
     Comment.Icon    = 'notes.jpg';
 else
     Comment.Icon    = 'notes_present.png';
 end
 
+% Subtask
 Subtask.Tooltip     = 'Add Subtask';
 Subtask.Icon        = 'plus.png';
 Subtask.CallBack    = @(~,~)add_task_gui(f,Task_ind,opts,'new task'); 
-Subtask.Enable      = true;
+Subtask.Visible      = true;
 
+% Subfolder
 Subfolder.Tooltip   = 'Add Subfolder';
 Subfolder.Icon      = 'folder.jpg';
 Subfolder.CallBack  = @(~,~)add_task_gui(f,Task_ind,opts,'new folder'); 
-Subfolder.Enable    = true;
+Subfolder.Visible    = true;
 
+% Edit
 Edit.Tooltip        = 'Edit Item';
 Edit.Icon           = 'edit.jpg';
 Edit.CallBack       = @(~,~)add_task_gui(f,Task_ind,opts,edit_str);
-Edit.Enable         = true;
+Edit.Visible         = true;
 
+% Complete
+if f.UserData.Tasks(Task_ind).Completed
+    Complete.Icon   = 'uncomplete.png';
+else
+    Complete.Icon   = 'checkmark.png';
+end
 Complete.Tooltip    = 'Complete Task';
-Complete.Icon       = 'checkmark.png';
-Complete.CallBack   = @(~,~)complete_task_wrapper(f,Task_ind,opts);
-Complete.Enable     = ~isFolder;
+Complete.CallBack   = @(~,~)toggle_complete_task_wrapper(f,Task_ind,opts);
+Complete.Visible    = ~isFolder;
 
+% Delete
 Delete.Tooltip      = 'Delete Task';
 Delete.Icon         = 'trash.png';
 Delete.CallBack     = @(~,~)toggle_delete_task_wrapper(f,Task_ind,opts);
-Delete.Enable       = true; % ~~~ this should change. Or something should. brainstorm. l8r.
+Delete.Visible       = true; % ~~~ this should change. Or something should. brainstorm. l8r.
 
 Buttons = [Complete,Subtask,Subfolder,Comment,Edit,Delete];
-% 
-% if isFolder
-%     % no complete button for folder items
-%     Buttons = Buttons(2:end);
-% end
 
 % positioning
 num_btns    = numel(Buttons);
@@ -1416,7 +1423,7 @@ for Button = Buttons
     'Icon',Button.Icon,...
     'Tooltip',Button.Tooltip,...
     'Tag',[Button.Tooltip,' ',num2str(Task_ind)],...
-    'Enable',Button.Enable);
+    'Visible',Button.Visible);
 
     % For displaying example, dont associate any functionality
     if Task_ind ~= opts.max_num_tasks
@@ -2013,13 +2020,13 @@ duedate_lbl.Visible     = ~Ongoing_tf;
 duedate_tx.Visible      = ~Ongoing_tf;
 end
 
-function complete_task_wrapper(f,Task_ind,opts)
+function toggle_complete_task_wrapper(f,Task_ind,opts)
 %% Wrapper function for complete_task (so we only redraw figure once)
 f.Pointer = 'watch';drawnow
 f.UserData = store_previous_tasks(f.UserData);
 
 % individual function call w/ recursive calls for subtasks
-complete_task(f,Task_ind,opts)
+toggle_complete_task(f,Task_ind,opts)
 
 % enable resort button
 if ~any(strcmp(f.UserData.RankBy,{'Date Created','Custom'})) % ~~~ weird caveat but I guess thats accurate
@@ -2034,29 +2041,39 @@ autosave_tasks(f,opts)
 f.Pointer = 'arrow';
 end
 
-function complete_task(f,Task_ind,opts)
-%% Toggle task completion and reflect in figure (no )
-% ~~~ currently this does NOT toggle, only sets true.
+function toggle_complete_task(f,Task_ind,opts)
+%% Toggle task completion and update parent task
 
-f.UserData.Tasks(Task_ind).Completed        = true;
-f.UserData.Tasks(Task_ind).CompletionDate   = datetime;
+% toggle completion state
+complete_state = ~f.UserData.Tasks(Task_ind).Completed;
+f.UserData.Tasks(Task_ind).Completed        = complete_state;
 
-% update task label object text
+% completion date 
+if complete_state
+    f.UserData.Tasks(Task_ind).CompletionDate   = datetime;
+else
+    f.UserData.Tasks(Task_ind).CompletionDate   = 'N/A';
+end
+
+% update task completion label object text
 lbl_obj = findobj(f,'Tag',['Completion Date ',num2str(Task_ind)]);
 lbl_obj.Text = completed_task_string(f.UserData.Tasks(Task_ind),opts); 
 
-% ~~~ fun idea: function this off and place it somewhere else that gets
-% called more often. Lets illustrate some test cases where we would want
-% this performed:
-% Task deleted --> recheck parent for completion
-% Task completed --> check parent for completion (this instance)
-% New Task added --> check parent for completion
+% update icon 
+if complete_state
+    complete_icon = 'uncomplete.png';
+else
+    complete_icon = 'checkmark.png';
+end
+f.UserData.Tasks(Task_ind).Labels.TaskBtns(1).Icon = complete_icon;
 
-% Check to complete parent_task recursively if exists and is folder
+% Check to toggle completion for parent_task recursively if exists and is folder
 if ~f.UserData.Tasks(Task_ind).isOriginal
     parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
-    if f.UserData.Tasks(parent_ind).isFolder && isComplete_folder(f,parent_ind)
-        complete_task(f,parent_ind,opts)
+    if f.UserData.Tasks(parent_ind).isFolder && ...
+            ((complete_state && isComplete_folder(f,parent_ind)) || ...
+            (~complete_state && f.UserData.Tasks(parent_ind).Completed))
+        toggle_complete_task(f,parent_ind,opts)
     end
 end
 end
@@ -2076,7 +2093,7 @@ if ~f.UserData.Tasks(Task_ind).isOriginal
     parent_ind = f.UserData.Tasks(Task_ind).ParentTask;
     if (isComplete_folder(f,parent_ind) && ~f.UserData.Tasks(parent_ind).Completed)...
             || (~isComplete_folder(f,parent_ind) && f.UserData.Tasks(parent_ind).Completed)
-        complete_task(f,parent_ind,opts)
+        toggle_complete_task(f,parent_ind,opts)
     end
 end
 
@@ -2970,15 +2987,16 @@ f.UserData.Tasks(task_ind).isFolder = ~f.UserData.Tasks(task_ind).isFolder;
 % so I can find the edit button switch the call option here, or do it in
 % update tasks. I think here is better, I suppose.
 
+% hide completion button for folders
 if f.UserData.Tasks(task_ind).isFolder
     edit_str        = 'edit folder';
-    complete_enable = false;
+    complete_visible = false;
 else
     edit_str = 'edit task';
-    complete_enable = true;
+    complete_visible = true;
 end
 
-f.UserData.Tasks(task_ind).Labels.TaskBtns(1).Enable  = complete_enable;
+f.UserData.Tasks(task_ind).Labels.TaskBtns(1).Visible  = complete_visible;
 
 task_edit_btn = findobj(f.UserData.Tasks(task_ind).Labels.Panel,'Tag',['Edit Item ',num2str(task_ind)]);
 task_edit_btn.ButtonPushedFcn = @(~,~)add_task_gui(f,task_ind,opts,edit_str);
