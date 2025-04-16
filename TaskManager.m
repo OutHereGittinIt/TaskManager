@@ -35,6 +35,7 @@ function TaskManager
 % independent options :
 
 opts.ban_fs         = 21;
+opts.btn_h_s        = 20;
 opts.btn_h          = 23;
 opts.btn_h_l        = 26; % larger button height
 opts.btn_h_xl       = 32;
@@ -56,6 +57,7 @@ opts.DefaultDurStr  = 'Days';
 opts.desc_w         = 400; % Task description width in add task GUI
 opts.dr_lbl_w       = 50;
 opts.dr_w           = 145;
+opts.duedate_tx_w   = 75;
 opts.DurationItems  = {'Hours','Days','Weeks','Months','Years'};
 opts.dur_w          = 70;
 opts.dur_w_l        = 85; %*
@@ -126,7 +128,7 @@ opts_pan_w      = opts.dr_lbl_w + opts.dr_w + opts.spacer;
 opts.left_pan_w = max([btn_pan_w,opts_pan_w]) + 3*opts.spacer;
 
 % title panel height
-opts.title_pan_h = 2*opts.tx_h + opts.btn_h_xl + 4*opts.spacer;
+opts.title_pan_h = 3*opts.tx_h + opts.btn_h_xl + 5*opts.spacer;
 
 % button panel height
 opts.btn_pan_h  = num_btns * (opts.spacer + opts.btn_h_l) + opts.spacer;
@@ -339,6 +341,9 @@ f.UserData.Name = [fname,opts.ext];
 f.UserData.NumTasks = 0;
 f.UserData.Tasks(opts.max_num_tasks,1) = empty_task(opts.max_num_tasks);
 
+% no default due date as default (not modifiable by UserData)
+f.UserData.DefaultDueDate = 'N/A';
+
 % Load defualt settings from file (if saved) or default default settings (default inception lol,maybe describe this better)
 warning off
 if exist(opts.data_filename,'file')
@@ -359,9 +364,10 @@ end
 warning on
 
 % ~~~ there must be a better way to do this
-% ~~~ emphasizing ^
-fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr','deleted_clr',...
-    'pastdue_clr','CompletionMode','Show','DescFontWeight','RankBy','Autosave'};
+% ~~~ bumps ^
+fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr',...
+    'deleted_clr','pastdue_clr','CompletionMode','Show','DescFontWeight',...
+    'RankBy','Autosave'};
 for field = fields
     f.UserData.(field{1}) = default_struct.(field{1});
 end
@@ -513,7 +519,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-        || ~isequal(UserData.CompatabilityVerified,'4/11/2025')
+        || ~isequal(UserData.CompatabilityVerified,'4/15/2025')
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -567,17 +573,18 @@ end
 function add_title_panel(f,opts)
 %% Draw Title Banner for Figure
 
+% add panel 
 f.UserData.y0 = f.UserData.y0 - opts.title_pan_h;
-p = uipanel(f,'Position',[0,f.UserData.y0,opts.fig_w - opts.spacer,opts.title_pan_h]);
+p = uipanel(f,'Position',[opts.spacer,f.UserData.y0,opts.fig_w - 2*opts.spacer,opts.title_pan_h]);
 
 % add title
-ypos = 2*opts.tx_h + 3*opts.spacer;
+ypos = 3*opts.tx_h + 4*opts.spacer;
 uilabel(p,'Text',f.Name,'FontSize',opts.title_fs,'FontColor',[0 0 1],...
     'Position',[opts.spacer,ypos,opts.fig_w - 2*opts.spacer,opts.btn_h_xl]);
 
 % add autosave lable & switch 
 lbl_w = 90;
-ypos = opts.tx_h + 2*opts.spacer;
+ypos = 2*opts.tx_h + 3*opts.spacer;
 uilabel(p,'Text','Autosave mode:','Position',[opts.spacer,ypos,lbl_w,opts.tx_h]);
 
 if f.UserData.Autosave
@@ -596,6 +603,18 @@ uilabel(p,'Text',autosave_str,...
     'Tag','Autosave Label','VerticalAlignment','bottom');
 % ~~~ this displays a new save date without actually saving. needs 
 % autosave(f,opts,'manual')
+% ^ but actually, in what case would you need to save here? Does it matter
+% if that time is technically incorrect? idk
+
+% add default due date label and textarea (start disabled)
+ypos = ypos - opts.spacer - opts.tx_h;
+lbl_w = 160;
+lab_pos = [opts.spacer,ypos,lbl_w,opts.tx_h];
+uilabel(p,"Text",'Default Manager Due Date: ','Position',lab_pos);
+
+txarea_pos = [opts.spacer + lbl_w,ypos,opts.duedate_tx_w,opts.btn_h_s];
+uitextarea(p,'Position',txarea_pos,'Value',f.UserData.DefaultDueDate,...
+    'ValueChangedFcn',@(self,~)set_default_duedate(f,self));
 end
 
 function str = autosave_str
@@ -1920,8 +1939,6 @@ function ypos = add_task_prompt(f,f2,ypos,task_ind,add_task_ind,final_task,opts,
 
 add_task_ind = num2str(add_task_ind);
 
-duedate_tx_w    = 75; % ~~~ trying
-
 if contains(option,'task')
     %% Once vs. Ongoing switch
 
@@ -1944,9 +1961,9 @@ if contains(option,'task')
     uilabel(f2,'Text','Due Date: ','Tag','Due Date Label',...
         'Position',duedate_pos);
     duedate_pos_tx = duedate_pos;
-    duedate_pos_tx([1,3]) = [2*opts.spacer + opts.lbl_w,duedate_tx_w];
+    duedate_pos_tx([1,3]) = [2*opts.spacer + opts.lbl_w,opts.duedate_tx_w];
     if isempty(task_ind) || f.UserData.Tasks(task_ind).isFolder
-        date_str = 'N/A'; % ~~~ this is where default due date would be used
+        date_str = f.UserData.DefaultDueDate;
     else
         % Pass on parent task due date as default child task due date
         if isdatetime(f.UserData.Tasks(task_ind).DueDate)
@@ -3106,4 +3123,9 @@ else
     datestr = Task.DueDate;
 end
 lbl_str = ['Due Date: ',datestr];
+end
+
+function set_default_duedate(f,self)
+%% Set default manager due date from uitextarea
+f.UserData.DefaultDueDate = self.Value;
 end

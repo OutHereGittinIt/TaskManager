@@ -84,6 +84,10 @@ if ~isfield(UserData,'deleted_clr')
     UserData.deleted_clr = opts.DefaultSettings.deleted_clr;
 end
 
+if ~isfield(UserData,'DefaultDueDate')
+    UserData.DefaultDueDate = 'N/A';
+end
+
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '4/11/2025';
+UserData.CompatabilityVerified = '4/15/2025';
 end
