@@ -87,7 +87,7 @@ function TaskManager
 % ** Brainstorming result..
 % Ongoing application:
 %   - New task          [done]
-%   - Complete task     [now]
+%   - Complete task     [done]
 %   Priority movement occurs regardless of sortby mode
 %
 % Retroactive application:
@@ -2202,6 +2202,29 @@ if ~f.UserData.Tasks(Task_ind).isOriginal
             ((complete_state && isComplete_folder(f,parent_ind)) || ...
             (~complete_state && f.UserData.Tasks(parent_ind).Completed))
         toggle_complete_task(f,parent_ind,opts)
+    end
+end
+
+% switch priority as needed :
+
+% find lowest-priority incomplete task
+Tasks = f.UserData.Tasks;
+siblings = find_siblings(f,Task_ind);
+
+incomplete_siblings = siblings(~[Tasks(siblings).Completed]);
+%if f.UserData.AutoSetPriority && ~isempty(incomplete_siblings) % ~~~ re-instate plz!!
+if ~isempty(incomplete_siblings)
+    % set task below incomplete tasks
+
+    % find new priority to switch this task to : the lowest incomplete task
+    [low_incomp_priority,switch_ind] = max([Tasks(incomplete_siblings).Priority]);
+
+    % If this task is lower than the recenetly completed task, switch 'em
+    if low_incomp_priority > f.UserData.Tasks(Task_ind).Priority
+        f.UserData.move_from_ind    = Task_ind;
+        f.UserData.moving_siblings  = siblings;
+        switching_task              = incomplete_siblings(switch_ind);
+        move_priority(f,switching_task,opts,'auto')
     end
 end
 end
