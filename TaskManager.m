@@ -453,12 +453,7 @@ else
 end
 warning on
 
-% ~~~ there must be a better way to do this
-% ~~~ bumps ^
-fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr',...
-    'deleted_clr','pastdue_clr','CompletionMode','Show','DescFontWeight',...
-    'RankBy','Autosave'};
-for field = fields
+for field = fieldnames(opts.DefaultSettings)'
     f.UserData.(field{1}) = default_struct.(field{1});
 end
 
@@ -1865,8 +1860,7 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
     f.UserData.Tasks(task_ind).Priority = numel(siblings) + 1;
 
     completed_siblings = siblings([Tasks(siblings).Completed]);
-    %if f.UserData.AutoSetPriority && ~isempty(completed_siblings) % ~~~ re-instate plz!!
-    if ~isempty(completed_siblings)
+    if f.UserData.AutoSetPriority && ~isempty(completed_siblings)
         % set task above completed tasks
 
         % find new priority to switch this task to : the highest completed
@@ -2212,8 +2206,7 @@ Tasks = f.UserData.Tasks;
 siblings = find_siblings(f,Task_ind);
 
 incomplete_siblings = siblings(~[Tasks(siblings).Completed]);
-%if f.UserData.AutoSetPriority && ~isempty(incomplete_siblings) % ~~~ re-instate plz!!
-if ~isempty(incomplete_siblings)
+if f.UserData.AutoSetPriority && ~isempty(incomplete_siblings) && complete_state
     % set task below incomplete tasks
 
     % find new priority to switch this task to : the lowest incomplete task
@@ -2750,8 +2743,10 @@ uilabel(pan_obj,'Text','Options','FontSize',opts.ban_fs,...
     'Position',banner_pos,'HorizontalAlignment','center',...
     'VerticalAlignment','center');
 
-f2.ypos = banner_y0;
-add_autoset_priority_option(f,f2,pan_obj,opts)
+flags(1).name = 'Auto-Set Priority';
+flags(1).desc = 'Automatically set completed tasks lesser in priority to incomplete tasks upon adding and completing tasks';
+
+display_flags(f,f2,flags,pan_obj,banner_y0,opts)
 end
 
 function add_completion_mode_option(f,pan_obj,ypos_0,opts)
@@ -3261,14 +3256,41 @@ function set_default_duedate(f,self)
 f.UserData.DefaultDueDate = self.Value;
 end
 
-function add_autoset_priority_option(f,f2,pan_obj,opts)
-%% Add display option for flag to enable autosetting task priority 
+function display_flags(f,f2,flags,pan_obj,ypos,opts)
+%% Display user-setting flags with on/off uiswitch
+tx_l    = 120;
+uisw_w  = 85;
 
-% ~~~ I thought we wanted a default function to use for true or false flags
-% like this one
+% general label and switch positions
+lbl_pos = [opts.spacer,0,tx_l,opts.tx_h];
+sw_pos  = [2*opts.spacer + tx_l,0,uisw_w,opts.tx_h];
 
-% the inputs would literally just be the variable name 
-% which is nice
+for flag = flags
+    % move ypos down
+    ypos = ypos - opts.tx_h-opts.spacer;
+    lbl_pos(2) = ypos;
+    sw_pos(2)  = ypos;
 
-% well we can just change the function name at the end I suppose
+    % name label
+    uilabel(pan_obj,'Position',lbl_pos,'Text',flag.name,'Tooltip',flag.desc);
+
+    % switch
+    real_name = replace(flag.name,{'-',' '},'');
+    if f.UserData.(real_name)
+        Value = 'On';
+    else
+        Value = 'Off';
+    end
+    uiswitch(pan_obj,'Position',sw_pos,'Value',Value,'ValueChangedFcn',@(~,self)assign_flag_value(f,f2,self,real_name));
+end
+end
+
+function assign_flag_value(f,f2,self,real_name)
+%% Store value from uiswitch to userdata flags
+if strcmpi(self.Value,'on')
+    f.UserData.(real_name) = true;
+else
+    f.UserData.(real_name) = false;
+end
+HasChanged(f2)
 end
