@@ -88,6 +88,10 @@ if ~isfield(UserData,'DefaultDueDate')
     UserData.DefaultDueDate = 'N/A';
 end
 
+if ~isfield(UserData,'AutoSetPriority')
+    UserData.AutoSetPriority = false;
+end
+
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '4/15/2025';
+UserData.CompatabilityVerified = '4/25/2025';
 end
