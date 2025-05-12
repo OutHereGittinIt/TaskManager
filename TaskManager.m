@@ -15,7 +15,7 @@ function TaskManager
 % completion? i.e. is there are any retrospective re-ordering to assume a
 % well-structured order to maintain with simple one-at-a-time moves?
 
-% other case: What about not in custom mode? do oyu hold off on uipdates
+% other case: What about not in custom mode? do you hold off on uipdates
 % until switched to custom mode, and then re-assess priority based on
 % movements since last time in custom mode (if ever)?
 
@@ -31,7 +31,7 @@ function TaskManager
 % completion. 
 
 % what does setting upon completion look like w/o a sibling-level
-% reassessment i.e. with a not structured priority ranking?
+% reassessment i.e. with an unstructured priority ranking?
 
     % One easy answer would just be send it to the bottom everytime upon
     % completion. OR slightly more advanced send it to just below the
@@ -55,7 +55,7 @@ function TaskManager
     % application.
 
     % so these four, again:
-    % a) prompt upon new setting {w/ or w/o other clean-up button}
+    % a) prompt upon setting changes {w/ or w/o other clean-up button}
     % b) button for clean-up for retroactive from home page
     % c) no retroactive application
     % d) automatic retroactive application
@@ -84,11 +84,20 @@ function TaskManager
 % we also have to do the settings display update as well. Will write to the
 % TM Manager.
 
+% ** Brainstorming result..
+% Ongoing application:
+%   - New task          [done]
+%   - Complete task     [now]
+%   Priority movement occurs regardless of sortby mode
+%
+% Retroactive application:
+%   Prompt when setting turns on to retrofit all tasks or not (not if already on)                                   [not done]
+%   [Future idea, NOT for this pull request] to have main menu or settings button to apply retrofit as requested    [not done]   
 
-%% Questions / debug (not features)
+%% Questions
 
 % - f.Pointer is not working properly!! have to move mouse to go back to
-% arrow. This is a very bad look
+% arrow. This is a very bad look, cant find anything online.
 
 %% When to autosave -- Feel free to modify
 
@@ -1560,7 +1569,7 @@ function move_to_btn = add_move_to_button(f,task_ind,parent_panel,opts)
 move_to_btn = uibutton(parent_panel,'Icon','PriorityMoverLocation.png',...
     'Position',[opts.mover_xpos,0,opts.priority_btn_w * [1,1]],...
     'Tag',['Move to ',num2str(task_ind)],'Text','',...
-    'ButtonPushedFcn',@(~,~)move_priority(f,task_ind,opts));
+    'ButtonPushedFcn',@(~,~)move_priority(f,task_ind,opts,'manual'));
 end
 
 function prompt_priority_move(f,parent_panel,task_ind,btn)
@@ -1641,7 +1650,7 @@ end
 siblings = siblings(siblings ~= Task_ind);
 end
 
-function move_priority(f,move_to_ind,opts)
+function move_priority(f,move_to_ind,opts,call_option)
 %% Change the priority of task amongst siblings ; callback for loaction btn
 
 % store old userdata for undo 
@@ -1679,11 +1688,13 @@ for priority = move_priorities
     f.UserData.Tasks(sibling_task_ind).Priority = priority - dir;
 end
 
-% draw the tasks again
-update_tasks_panel(f,opts,'normal');
-
-% Auto-save
-autosave_tasks(f,opts)
+if strcmpi(call_option,'manual') % automatic calls will update on their own
+    % draw the tasks again
+    update_tasks_panel(f,opts,'normal');
+    
+    % Auto-save
+    autosave_tasks(f,opts)
+end
 end
 
 function edit_comment(f,Task_ind,opts)
@@ -1817,7 +1828,8 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
     % New task reference index
     f.UserData.NumTasks = f.UserData.NumTasks + 1;
     task_ind            = f.UserData.NumTasks;
-    Task                = f.UserData.Tasks(task_ind);
+    Tasks               = f.UserData.Tasks;
+    Task                = Tasks(task_ind);
 
     % assign task attributes:
     Task.CreationDate   = datetime;
@@ -1838,22 +1850,37 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
         Task.isOriginal = false;
         Task.ParentTask = parent_task_ind;
         % add new task to the parent task subtask list
-        f.UserData.Tasks(parent_task_ind).SubTasks = ...
-            [f.UserData.Tasks(parent_task_ind).SubTasks,task_ind];
+        Tasks(parent_task_ind).SubTasks = ...
+            [Tasks(parent_task_ind).SubTasks,task_ind];
         
         % set collapsed status based on parent
-        Task.Collapsed = f.UserData.Tasks(parent_task_ind).Collapsing;
+        Task.Collapsed = Tasks(parent_task_ind).Collapsing;
     end
 
-    % Assign New Task to task list
+    % Assign New Task to task list to assess siblings
     f.UserData.Tasks(task_ind) = Task;
 
-    % Task Priority (amongst siblings) (always last) ~~~ this should change
-    % with new option to go above completed tasks
-    f.UserData.Tasks(task_ind).Priority = numel(find_siblings(f,task_ind)) + 1;
+    % Task Priority (amongst siblings) (default last)
+    siblings = find_siblings(f,task_ind);
+    f.UserData.Tasks(task_ind).Priority = numel(siblings) + 1;
+
+    completed_siblings = siblings([Tasks(siblings).Completed]);
+    %if f.UserData.AutoSetPriority && ~isempty(completed_siblings) % ~~~ re-instate plz!!
+    if ~isempty(completed_siblings)
+        % set task above completed tasks
+
+        % find new priority to switch this task to : the highest completed
+        % task
+        [~,switch_ind]              = min([Tasks(completed_siblings).Priority]);
+        switching_task              = completed_siblings(switch_ind);
+        f.UserData.move_from_ind    = task_ind;
+        f.UserData.moving_siblings  = siblings;
+
+        move_priority(f,switching_task,opts,'auto')
+    end
 
     % Uncomplete parent task as necessary (if exists, if is folder, and if currently complete)
-    if ~isempty(parent_task_ind) && f.UserData.Tasks(parent_task_ind).isFolder && f.UserData.Tasks(parent_task_ind).Completed
+    if ~isempty(parent_task_ind) && Tasks(parent_task_ind).isFolder && Tasks(parent_task_ind).Completed
         f.UserData.Tasks(parent_task_ind).Completed = false;
     end
 end
