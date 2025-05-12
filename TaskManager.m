@@ -5,6 +5,86 @@ function TaskManager
 % David Richardson
 % 11/11/2023
 
+% Brainstorming... 
+% lets spell out the obvious first, then move to edge cases
+
+% obvious: Upon completion, set task priority to less than all of the
+% uncompleted tasks (method itself not neccessarily obvious)
+
+% less obvious: when to rearrange order to meet this besides new
+% completion? i.e. is there are any retrospective re-ordering to assume a
+% well-structured order to maintain with simple one-at-a-time moves?
+
+% other case: What about not in custom mode? do oyu hold off on uipdates
+% until switched to custom mode, and then re-assess priority based on
+% movements since last time in custom mode (if ever)?
+
+% ok here's my opinion. if the label says "automatically set..." I think
+% its fair to assume it will overwrite any work you do contrary to that
+% automatic set. i.e. If I set a completed task priority high while this
+% flag is set, that will be over-written at some point and set back to a
+% relatively low priority again. 
+
+% With that said, I think the retro-active aspect is still in question. But
+% leads to seemingly the same place regardless, which is whether or not we
+% have a redraw of a whole sibling task set as opposed ot just setting upon
+% completion. 
+
+% what does setting upon completion look like w/o a sibling-level
+% reassessment i.e. with a not structured priority ranking?
+
+    % One easy answer would just be send it to the bottom everytime upon
+    % completion. OR slightly more advanced send it to just below the
+    % lowest incomplete task
+
+    % ^ I actually like this answer a lot, but it does almost beg for a
+    % "clean-up" operation of sorts (probably push button) which could have
+    % options such as reording the priority for completed tasks, maybe
+    % clearing the deleted tasks into trash (just further deleted to make
+    % room for slightly less deleted, still can be seen somewhere somehow
+    % TBD).
+
+    % And what about an option for a dialog right after settings are
+    % applied if this setting was changed to true, where it asks if you
+    % want to retroactively apply re-ordering, as well ass new ordering
+
+    % ^ That would seem to cover all fronts. I'm not 100% sure I like it
+    % but more than 50%. We'll toss it over for a little. Does include a
+    % little more work with the dialog portion. Alternative? clean-up
+    % button, no retroactive application, automatic retroactive
+    % application.
+
+    % so these four, again:
+    % a) prompt upon new setting {w/ or w/o other clean-up button}
+    % b) button for clean-up for retroactive from home page
+    % c) no retroactive application
+    % d) automatic retroactive application
+
+    % obviously the order of difficulty /work involved is, from least
+    % difficult, c d b a. Options a and b are not mutually exclusive, so
+    % the most intensive option is of course ab, doing both the dialog and
+    % the standard-use push button. 
+
+% ^ and then also, there is adding a new subtask to a group of sibling
+% tasks. 
+
+% ^^ That and the movement upon completion are the "ongoing priority
+% setting", there is also "retroactive priority setting" as discussed above
+% with option set a b c d. 
+
+% Anything else to consider? 
+
+% I think so far my favorite option is a). There isnt really enough else
+% going on to justify the work on b). Although probbaly not that much work
+% but still. Will probably be done later with other clean up operations
+
+% ok. So we do option a. Look for change in settings and needed changes.
+% Aight.
+
+% we also have to do the settings display update as well. Will write to the
+% TM Manager.
+
+
 %% Questions / debug (not features)
 
 % - f.Pointer is not working properly!! have to move mouse to go back to
@@ -82,7 +162,7 @@ opts.spacer         = 5;
 opts.show_lbl_clr   = false;
 opts.tab_w          = 30; %**
 opts.task_pan_clr   = [.92,.93,.99];
-opts.task_pan_w     = 680;
+opts.task_pan_w     = 750;
 opts.title_fs       = 22;
 opts.tx_h           = 16; % height of common text labels
 opts.type_lbl_w     = 95; %**
@@ -101,6 +181,7 @@ opts.OptionalFieldsConditions = {...
 opts.DefaultSettings.Autosave               = true;
 opts.DefaultSettings.complete_clr           = [.8,1,.8];
 opts.DefaultSettings.CompletionMode         = 'by subtask';
+opts.DefaultSettings.AutoSetPriority        = false;
 opts.DefaultSettings.default_clr            = [.85,.7,.71];
 opts.DefaultSettings.deleted_clr            = [.82,.82,.82];
 opts.DefaultSettings.folder_clr             = [.98,.96,.65];
@@ -519,7 +600,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-        || ~isequal(UserData.CompatabilityVerified,'4/15/2025')
+        || ~isequal(UserData.CompatabilityVerified,'4/25/2025')
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -798,11 +879,7 @@ switch call_option
             
             % show zeros on stats panel
             update_stats_pan(f)
-            
-            % return
-            parent_panel.Visible = true;
-            f.Pointer = 'arrow';drawnow
-            return
+
         elseif ~isempty(lbl_obj) && lbl_obj.Visible
             % stop showing empty tasks label, if displayable tasks present
             lbl_obj.Visible = false;
@@ -903,6 +980,14 @@ for task_ind = update_ind
         end
         % Nothing else to do for undisplayed tasks, move on
         continue
+    end
+
+    % exit early if nothing else to display
+    if numel(display_ind) == 0
+        parent_panel.Visible = true;
+        f.Pointer = 'arrow';drawnow
+        focus(f)
+        return
     end
 
     %% Collapse existence
@@ -1782,7 +1867,6 @@ end
 function  Task = add_contingent_attributes(f2,Task,add_task_ind,opts,isFolder)
 %% Add the attributes read from add_task_GUI to new or exisitng task
 
-
 % ~~~ note/question: Assigning PastDue here might be redundant, shouldnt be
 % assessed in rank_task_priority after task creation in update_tasks_panel?
 
@@ -2164,7 +2248,7 @@ autosave_tasks(f,opts)
 f.Pointer = 'arrow';
 end
 
-function autosave_tasks(f,opts,manual) %#ok<INUSD> 
+function autosave_tasks(f,opts,manual)  %#ok<INUSD>
 %% save tasks to task manager file
 
 % only autosave if user selected
@@ -2415,7 +2499,7 @@ else
 end
    
 % color block and RGB
-add_color_objects(pan_obj,f,color_access_str,ypos,opts)
+add_color_objects(pan_obj,color_access_str,ypos,opts)
 
 if exist('limits_ind','var')
     % add delete option
@@ -2505,7 +2589,7 @@ disp_colors(f,f2,opts)
 HasChanged(f2)
 end
 
-function add_color_objects(pan_obj,f,color_access_str,ypos,opts)
+function add_color_objects(pan_obj,color_access_str,ypos,opts)
 %% Add Color Objects (Filled button, 1x3 RGB uitextares)
 
 xpos            = opts.color_objects_x0;
@@ -2515,7 +2599,7 @@ btn_square_size = opts.clr_h;
 % Button with color (opens panel, basic for now)
 btn_pos = [xpos,ypos,btn_square_size,btn_square_size];
 btn = uibutton(pan_obj,'Position',btn_pos,'Text','','BackgroundColor',color0,...
-    'ButtonPushedFcn',@(btn,~)color_prompt(pan_obj,btn,f,color_access_str,opts));
+    'ButtonPushedFcn',@(btn,~)color_prompt(pan_obj,btn,color_access_str,opts));
 
 % (quadruple spacer here)
 xpos = xpos + btn_square_size + 4*opts.spacer;
@@ -2528,14 +2612,14 @@ for i = 1:3
     tx_pos([1,3]) = [tx_pos(1) + opts.num_w,opts.num_w_xl];
     uitextarea(pan_obj,'Position',tx_pos,'Value',num2str(round(color0(i),opts.rgb_int_round)),...
         'Tag',[color_access_str,' ',Tags{i}],'WordWrap','off',...
-        'ValueChangedFcn',@(tx,~)set_rgb_value(tx,btn,f,color_access_str,i),...
+        'ValueChangedFcn',@(tx,~)set_rgb_value(tx,btn,color_access_str,i),...
         'FontSize',opts.clr_fs);  %,'VerticalAlignment','bottom');
     tx_pos([1,3]) = [tx_pos(1) + opts.num_w_xl + opts.spacer,opts.num_w];
 end
 end
 
-function color_prompt(pan_obj,btn,f,color_access_str,opts) %#ok<INUSD>
-%% Prompt color optins and reflect selection to proper rgb textareas
+function color_prompt(pan_obj,btn,color_access_str,opts) 
+%% Prompt color options and reflect selection to proper rgb textareas
 
 color = uisetcolor;
 figure(pan_obj.Parent)
@@ -2555,7 +2639,7 @@ for i = 1:3
     tx_obj.Value = num2str(round(color(i),opts.rgb_int_round));
 end
 
-% set color in userdata
+% set color in main figure userdata
 eval([color_access_str,' = color;'])
 
 f2 = pan_obj.Parent;
@@ -2574,7 +2658,7 @@ if ~f2.UserData.FigureChanged
 end
 end
 
-function set_rgb_value(tx,btn,f,color_access_str,rgb_ind) %#ok<INUSD>
+function set_rgb_value(tx,btn,color_access_str,rgb_ind)
 %% Read in change to RGB value of given color, reflect change in f.UserData
 
 % ~~~ Add a check for num2str ~= NaN for bad digit entry
@@ -2616,17 +2700,14 @@ uilabel(pan_obj,'Text','Options','FontSize',opts.ban_fs,...
     'Position',banner_pos,'HorizontalAlignment','center',...
     'VerticalAlignment','center');
 
-% Complete task option :
-add_completion_mode_option(f,pan_obj,banner_y0,opts)
-
-% ~~~ more to do ^ ? use ypos_f = add_...
+f2.ypos = banner_y0;
+add_autoset_priority_option(f,f2,pan_obj,opts)
 end
 
 function add_completion_mode_option(f,pan_obj,ypos_0,opts)
 %% Add Option to complete tasks manually or as groups (to options settings)
 
 f2 = pan_obj.Parent;
-
 % label
 
 option_h    = opts.btn_h;
@@ -3128,4 +3209,16 @@ end
 function set_default_duedate(f,self)
 %% Set default manager due date from uitextarea
 f.UserData.DefaultDueDate = self.Value;
+end
+
+function add_autoset_priority_option(f,f2,pan_obj,opts)
+%% Add display option for flag to enable autosetting task priority 
+
+% ~~~ I thought we wanted a default function to use for true or false flags
+% like this one
+
+% the inputs would literally just be the variable name 
+% which is nice
+
+% well we can just change the function name at the end I suppose
 end
