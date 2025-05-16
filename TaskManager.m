@@ -15,7 +15,7 @@ function TaskManager
 % completion? i.e. is there are any retrospective re-ordering to assume a
 % well-structured order to maintain with simple one-at-a-time moves?
 
-% other case: What about not in custom mode? do oyu hold off on uipdates
+% other case: What about not in custom mode? do you hold off on uipdates
 % until switched to custom mode, and then re-assess priority based on
 % movements since last time in custom mode (if ever)?
 
@@ -31,7 +31,7 @@ function TaskManager
 % completion. 
 
 % what does setting upon completion look like w/o a sibling-level
-% reassessment i.e. with a not structured priority ranking?
+% reassessment i.e. with an unstructured priority ranking?
 
     % One easy answer would just be send it to the bottom everytime upon
     % completion. OR slightly more advanced send it to just below the
@@ -55,7 +55,7 @@ function TaskManager
     % application.
 
     % so these four, again:
-    % a) prompt upon new setting {w/ or w/o other clean-up button}
+    % a) prompt upon setting changes {w/ or w/o other clean-up button}
     % b) button for clean-up for retroactive from home page
     % c) no retroactive application
     % d) automatic retroactive application
@@ -84,11 +84,20 @@ function TaskManager
 % we also have to do the settings display update as well. Will write to the
 % TM Manager.
 
+% ** Brainstorming result..
+% Ongoing application:
+%   - New task          [done]
+%   - Complete task     [done]
+%   Priority movement occurs regardless of sortby mode
+%
+% Retroactive application:
+%   Prompt when setting turns on to retrofit all tasks or not (not if already on)                                   [not done]
+%   [Future idea, NOT for this pull request] to have main menu or settings button to apply retrofit as requested    [not done]   
 
-%% Questions / debug (not features)
+%% Questions
 
 % - f.Pointer is not working properly!! have to move mouse to go back to
-% arrow. This is a very bad look
+% arrow. This is a very bad look, cant find anything online.
 
 %% When to autosave -- Feel free to modify
 
@@ -181,7 +190,7 @@ opts.OptionalFieldsConditions = {...
 opts.DefaultSettings.Autosave               = true;
 opts.DefaultSettings.complete_clr           = [.8,1,.8];
 opts.DefaultSettings.CompletionMode         = 'by subtask';
-opts.DefaultSettings.AutoSetPriority        = false;
+opts.DefaultSettings.AutoSetPriority        = true;
 opts.DefaultSettings.default_clr            = [.85,.7,.71];
 opts.DefaultSettings.deleted_clr            = [.82,.82,.82];
 opts.DefaultSettings.folder_clr             = [.98,.96,.65];
@@ -444,12 +453,7 @@ else
 end
 warning on
 
-% ~~~ there must be a better way to do this
-% ~~~ bumps ^
-fields = {'Limits','default_clr','incomplete_clr','complete_clr','folder_clr',...
-    'deleted_clr','pastdue_clr','CompletionMode','Show','DescFontWeight',...
-    'RankBy','Autosave'};
-for field = fields
+for field = fieldnames(opts.DefaultSettings)'
     f.UserData.(field{1}) = default_struct.(field{1});
 end
 
@@ -1560,7 +1564,7 @@ function move_to_btn = add_move_to_button(f,task_ind,parent_panel,opts)
 move_to_btn = uibutton(parent_panel,'Icon','PriorityMoverLocation.png',...
     'Position',[opts.mover_xpos,0,opts.priority_btn_w * [1,1]],...
     'Tag',['Move to ',num2str(task_ind)],'Text','',...
-    'ButtonPushedFcn',@(~,~)move_priority(f,task_ind,opts));
+    'ButtonPushedFcn',@(~,~)move_priority(f,task_ind,opts,'manual'));
 end
 
 function prompt_priority_move(f,parent_panel,task_ind,btn)
@@ -1641,7 +1645,7 @@ end
 siblings = siblings(siblings ~= Task_ind);
 end
 
-function move_priority(f,move_to_ind,opts)
+function move_priority(f,move_to_ind,opts,call_option)
 %% Change the priority of task amongst siblings ; callback for loaction btn
 
 % store old userdata for undo 
@@ -1654,7 +1658,6 @@ move_from_ind = f.UserData.move_from_ind;
 f.WindowKeyPressFcn = @(f,keypress)'';
 
 % set priority value for task being moved :
-
 move_priority   = f.UserData.Tasks(move_from_ind).Priority;
 end_priority    = f.UserData.Tasks(move_to_ind).Priority;
 f.UserData.Tasks(move_from_ind).Priority = end_priority;
@@ -1679,11 +1682,13 @@ for priority = move_priorities
     f.UserData.Tasks(sibling_task_ind).Priority = priority - dir;
 end
 
-% draw the tasks again
-update_tasks_panel(f,opts,'normal');
-
-% Auto-save
-autosave_tasks(f,opts)
+if strcmpi(call_option,'manual') % automatic calls will update on their own
+    % draw the tasks again
+    update_tasks_panel(f,opts,'normal');
+    
+    % Auto-save
+    autosave_tasks(f,opts)
+end
 end
 
 function edit_comment(f,Task_ind,opts)
@@ -1817,7 +1822,8 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
     % New task reference index
     f.UserData.NumTasks = f.UserData.NumTasks + 1;
     task_ind            = f.UserData.NumTasks;
-    Task                = f.UserData.Tasks(task_ind);
+    Tasks               = f.UserData.Tasks;
+    Task                = Tasks(task_ind);
 
     % assign task attributes:
     Task.CreationDate   = datetime;
@@ -1838,22 +1844,37 @@ for add_task_ind = get_add_task_ind_from_f2(f2,opts)'
         Task.isOriginal = false;
         Task.ParentTask = parent_task_ind;
         % add new task to the parent task subtask list
-        f.UserData.Tasks(parent_task_ind).SubTasks = ...
-            [f.UserData.Tasks(parent_task_ind).SubTasks,task_ind];
+        Tasks(parent_task_ind).SubTasks = ...
+            [Tasks(parent_task_ind).SubTasks,task_ind];
+        f.UserData.Tasks(parent_task_ind) = Tasks(parent_task_ind);
         
         % set collapsed status based on parent
-        Task.Collapsed = f.UserData.Tasks(parent_task_ind).Collapsing;
+        Task.Collapsed = Tasks(parent_task_ind).Collapsing;
     end
 
-    % Assign New Task to task list
+    % Assign New Task to task list to assess siblings
     f.UserData.Tasks(task_ind) = Task;
 
-    % Task Priority (amongst siblings) (always last) ~~~ this should change
-    % with new option to go above completed tasks
-    f.UserData.Tasks(task_ind).Priority = numel(find_siblings(f,task_ind)) + 1;
+    % Task Priority (amongst siblings) (default last)
+    siblings = find_siblings(f,task_ind);
+    f.UserData.Tasks(task_ind).Priority = numel(siblings) + 1;
+
+    completed_siblings = siblings([Tasks(siblings).Completed]);
+    if f.UserData.AutoSetPriority && ~isempty(completed_siblings)
+        % set task above completed tasks
+
+        % find new priority to switch this task to : the highest completed
+        % task
+        [~,switch_ind]              = min([Tasks(completed_siblings).Priority]);
+        switching_task              = completed_siblings(switch_ind);
+        f.UserData.move_from_ind    = task_ind;
+        f.UserData.moving_siblings  = siblings;
+
+        move_priority(f,switching_task,opts,'auto')
+    end
 
     % Uncomplete parent task as necessary (if exists, if is folder, and if currently complete)
-    if ~isempty(parent_task_ind) && f.UserData.Tasks(parent_task_ind).isFolder && f.UserData.Tasks(parent_task_ind).Completed
+    if ~isempty(parent_task_ind) && Tasks(parent_task_ind).isFolder && Tasks(parent_task_ind).Completed
         f.UserData.Tasks(parent_task_ind).Completed = false;
     end
 end
@@ -2177,6 +2198,28 @@ if ~f.UserData.Tasks(Task_ind).isOriginal
         toggle_complete_task(f,parent_ind,opts)
     end
 end
+
+% switch priority as needed :
+
+% find lowest-priority incomplete task
+Tasks = f.UserData.Tasks;
+siblings = find_siblings(f,Task_ind);
+
+incomplete_siblings = siblings(~[Tasks(siblings).Completed]);
+if f.UserData.AutoSetPriority && ~isempty(incomplete_siblings) && complete_state
+    % set task below incomplete tasks
+
+    % find new priority to switch this task to : the lowest incomplete task
+    [low_incomp_priority,switch_ind] = max([Tasks(incomplete_siblings).Priority]);
+
+    % If this task is lower than the recenetly completed task, switch 'em
+    if low_incomp_priority > f.UserData.Tasks(Task_ind).Priority
+        f.UserData.move_from_ind    = Task_ind;
+        f.UserData.moving_siblings  = siblings;
+        switching_task              = incomplete_siblings(switch_ind);
+        move_priority(f,switching_task,opts,'auto')
+    end
+end
 end
 
 function toggle_delete_task_wrapper(f,Task_ind,opts)
@@ -2340,7 +2383,7 @@ f2.UserData.FigureChanged = false;
 centerfig(f2)
 
 % store current f userdata to revert to as necessary
-OldUserData = f.UserData;
+f.UserData.Old = f.UserData;
 
 % create button group
 tb_pos = [0,0,tab_w,subfig_sz(2)];
@@ -2363,9 +2406,9 @@ uipanel(f2,'Tag','Display','Position',panel_pos)
 % Close Button
 btn_pos = [tab_w + opts.spacer,opts.spacer,cancel_w,opts.btn_h];
 uibutton(f2,'Position',btn_pos,'Text','Cancel',...
-    'ButtonPushedFcn',@(~,~)restore_and_close_settings(f,f2,OldUserData),...
+    'ButtonPushedFcn',@(~,~)restore_and_close_settings(f,f2),...
     'FontSize',opts.fs);
-f2.CloseRequestFcn = @(~,~)restore_and_close_settings(f,f2,OldUserData);
+f2.CloseRequestFcn = @(~,~)restore_and_close_settings(f,f2);
 
 % Apply/Close button
 btn_pos(1) = btn_pos(1) + opts.spacer + cancel_w;
@@ -2384,10 +2427,10 @@ uibutton(f2,'Text','Set as New Default','FontSize',opts.fs,...
     'ButtonPushedFcn',@(~,~)set_new_default_options(f,opts));
 end
 
-function restore_and_close_settings(f,f2,OldUserData)
+function restore_and_close_settings(f,f2)
 %% Cancel settings changes & close
 if isvalid(f)
-    f.UserData = OldUserData;
+    f.UserData = f.UserData.Old;
 end
 delete(f2)
 end
@@ -2397,6 +2440,14 @@ function apply_and_close_settings(f,f2,opts)
 read_duration_limits(f)
 clf(f)
 delete(f2)
+
+% if autoset priority is changed on, prompt to apply retroactive
+% application or not
+if f.UserData.AutoSetPriority && ~f.UserData.Old.AutoSetPriority
+    prompt_AutoSetPriority_Retro_App(f,opts)
+    uiwait(f)
+end
+
 draw_figure(f,opts)
 autosave_tasks(f,opts)
 end
@@ -2700,8 +2751,10 @@ uilabel(pan_obj,'Text','Options','FontSize',opts.ban_fs,...
     'Position',banner_pos,'HorizontalAlignment','center',...
     'VerticalAlignment','center');
 
-f2.ypos = banner_y0;
-add_autoset_priority_option(f,f2,pan_obj,opts)
+flags(1).name = 'Auto-Set Priority';
+flags(1).desc = 'Automatically set completed tasks lesser in priority to incomplete tasks upon adding and completing tasks';
+
+display_flags(f,f2,flags,pan_obj,banner_y0,opts)
 end
 
 function add_completion_mode_option(f,pan_obj,ypos_0,opts)
@@ -3211,14 +3264,115 @@ function set_default_duedate(f,self)
 f.UserData.DefaultDueDate = self.Value;
 end
 
-function add_autoset_priority_option(f,f2,pan_obj,opts)
-%% Add display option for flag to enable autosetting task priority 
+function display_flags(f,f2,flags,pan_obj,ypos,opts)
+%% Display user-setting flags with on/off uiswitch
+tx_l    = 120;
+uisw_w  = 85;
 
-% ~~~ I thought we wanted a default function to use for true or false flags
-% like this one
+% general label and switch positions
+lbl_pos = [opts.spacer,0,tx_l,opts.tx_h];
+sw_pos  = [2*opts.spacer + tx_l,0,uisw_w,opts.tx_h];
 
-% the inputs would literally just be the variable name 
-% which is nice
+for flag = flags
+    % move ypos down
+    ypos = ypos - opts.tx_h-opts.spacer;
+    lbl_pos(2) = ypos;
+    sw_pos(2)  = ypos;
 
-% well we can just change the function name at the end I suppose
+    % name label
+    uilabel(pan_obj,'Position',lbl_pos,'Text',flag.name,'Tooltip',flag.desc);
+
+    % switch
+    real_name = replace(flag.name,{'-',' '},'');
+    if f.UserData.(real_name)
+        Value = 'On';
+    else
+        Value = 'Off';
+    end
+    uiswitch(pan_obj,'Position',sw_pos,'Value',Value,'ValueChangedFcn',@(~,self)assign_flag_value(f,f2,self,real_name));
+end
+end
+
+function assign_flag_value(f,f2,self,real_name)
+%% Store value from uiswitch to userdata flags
+if strcmpi(self.Value,'on')
+    f.UserData.(real_name) = true;
+else
+    f.UserData.(real_name) = false;
+end
+HasChanged(f2)
+end
+
+function prompt_AutoSetPriority_Retro_App(f,opts)
+%% Prompt user to apply autoset priority change retroactivley 
+
+dlg_w = 500;
+btn_w = 200;
+
+height = 3*opts.spacer + 2*opts.btn_h;
+width = 2*opts.spacer + dlg_w;
+f2 = uifigure;
+f2.Position(3:4) = [width,height];
+centerfig(f2)
+f2.CloseRequestFcn = @(~,~) close_autoset_retro_app(f,f2);
+
+% dialog
+lbl_pos = [opts.spacer,2*opts.spacer+opts.btn_h,dlg_w,opts.btn_h];
+lbl_txt = "Auto-Set Priority mode turned on for new tasks. Would you like to apply priority setting retro-actively to existing tasks?";
+uilabel(f2,'Position',lbl_pos,'Text',lbl_txt)
+
+% btn 1 - yes
+btn_txt = "Apply Retroactively";
+btn_pos = [opts.spacer,opts.spacer,btn_w,opts.btn_h];
+uibutton(f2,'Position',btn_pos,'Text',btn_txt,'ButtonPushedFcn',@(~,~)AutoSetPriority_Retro_app(f,f2))
+
+% btn 2 - no
+btn_txt = "Don't change existing task priority";
+btn_pos(1) = 2*opts.spacer + btn_w;
+uibutton(f2,'Position',btn_pos,'Text',btn_txt,'ButtonPushedFcn',@(~,~)close(f2))
+end
+
+function AutoSetPriority_Retro_app(f,f2)
+%% Apply retroactive priority changing to place completed tasks below incomplete tasks
+f2.Pointer = 'watch';drawnow
+
+Tasks = f.UserData.Tasks;
+
+% find every group of subtasks and re-arrange according to completion
+for task_ind = 1:f.UserData.NumTasks
+    subtasks = Tasks(task_ind).SubTasks;
+    if numel(subtasks) < 2
+        continue
+    end
+
+    % break into completed and incomplete subtasks
+    compl  = subtasks([Tasks(subtasks).Completed]);
+    incomp = subtasks(~[Tasks(subtasks).Completed]);
+
+    if isempty(compl) || isempty(incomp)
+        continue
+    end
+
+    % find highest (in rank number) priority for incomplete tasks
+    [Incomp_max_priority,switch_ind] = max([Tasks(incomp).Priority]);
+    move_to_ind = incomp(switch_ind);
+
+    % find completed tasks with priorities lower than highest
+    % incomplete
+    all_move_down_ind = compl([Tasks(compl).Priority] < Incomp_max_priority);
+    for move_down_ind = all_move_down_ind
+        f.UserData.move_from_ind   = move_down_ind;
+        f.UserData.moving_siblings = subtasks(subtasks ~= move_down_ind);
+        move_priority(f,move_to_ind,[],'auto')
+    end
+end
+close(f2)
+end
+
+function close_autoset_retro_app(f,f2)
+%% close dialog nd resume settings update after autoset priority prompt
+if isvalid(f)
+    uiresume(f)
+end
+delete(f2)
 end
