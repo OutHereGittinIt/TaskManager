@@ -435,33 +435,10 @@ f.UserData.Tasks(opts.max_num_tasks,1) = empty_task(opts.max_num_tasks);
 f.UserData.DefaultDueDate = 'N/A';
 
 % Load defualt settings from file (if saved) or default default settings (default inception lol,maybe describe this better)
-warning off
-if exist(opts.data_filename,'file')
-    LoadedStruct = load(opts.data_filename,'DefaultSettings');
-    if isempty(fieldnames(LoadedStruct))
-        % if Default Settings havent been saved off, use default default
-        % settings
-        default_struct = opts.DefaultSettings;
-    else
-        % use custom default settings
-        default_struct = LoadedStruct.DefaultSettings;
-    end
-else
-    % if Default Settings havent been saved off, use default default
-    % settings
-    default_struct = opts.DefaultSettings;
-end
-warning on
-
-for field = fieldnames(opts.DefaultSettings)'
-    f.UserData.(field{1}) = default_struct.(field{1});
-end
-
-% Read in and parse some default settings
-read_duration_limits(f)
+set_default_settings(f,opts)
 
 % Store for previous ('undo') functionality
-f.UserData.Old  = f.UserData;
+f.UserData.Old  = f.UserData; % ~~~ is this necessary here???
 
 % Save to new file
 UserData        = f.UserData;
@@ -2387,7 +2364,7 @@ f.UserData.Old = f.UserData;
 
 % create button group
 tb_pos = [0,0,tab_w,subfig_sz(2)];
-tb = uibuttongroup(f2,'Position',tb_pos,'SelectionChangedFcn',@(~,event)disp_sub_setting(f,f2,event,opts));
+tb = uibuttongroup(f2,'Position',tb_pos,'SelectionChangedFcn',@(~,event)disp_sub_setting(f,f2,event,opts),'Tag','Settings Button Group');
 btn_pos = [0,tb_pos(4),tab_w,tab_h];
 for i = 1:numel(TabNames)
     btn_pos(2) = btn_pos(2) - tab_h;
@@ -2418,13 +2395,16 @@ uibutton(f2,'Position',btn_pos,...
     'Visible','off','Text','Apply & Close','Tag','Apply',...
     'FontSize',opts.fs);
 
-% ~~~ add Revert to Default Button -- reference olduser data here 
-
 % Set as new default 
 btn_pos([1,3]) = [btn_pos(1) + opts.spacer + opts.btn_w,opts.btn_w_l];
 uibutton(f2,'Text','Set as New Default','FontSize',opts.fs,...
     'Position',btn_pos,'Tag','Set Default','Visible','off',...
     'ButtonPushedFcn',@(~,~)set_new_default_options(f,opts));
+
+% Restore Default
+btn_pos(1) = btn_pos(1) + opts.spacer + opts.btn_w_l;
+uibutton(f2,'Text','Restore Default','Visible','off','Tag','Restore Default',...
+    'Position',btn_pos,'ButtonPushedFcn',@(~,~)restore_default_settings(f,f2,opts))
 end
 
 function restore_and_close_settings(f,f2)
@@ -2701,10 +2681,13 @@ function HasChanged(f2)
 %% set and reflect that figure input has been accetped
 if ~f2.UserData.FigureChanged
     f2.UserData.FigureChanged = true;
-    % Show 'set as new default' and 'apply and close' buttons
-    btn = findobj(f2,'Tag','Apply');
+
+    % Show settings buttons working with changes
+    btn         = findobj(f2,'Tag','Apply');
     btn.Visible = true;
-    btn = findobj(f2,'Tag','Set Default');
+    btn         = findobj(f2,'Tag','Set Default');
+    btn.Visible = true;
+    btn         = findobj(f2,'Tag','Restore Default');
     btn.Visible = true;
 end
 end
@@ -2808,7 +2791,6 @@ function disp_task_layout(f,f2,opts)
 
 % remove old objects
 p = findobj(f2,'Tag','Display');
-delete(p.Children) 
 
 % draw banner
 ban_str     = 'Task Layout Options';
@@ -3375,4 +3357,66 @@ if isvalid(f)
     uiresume(f)
 end
 delete(f2)
+end
+
+function set_default_settings(f,opts)
+%% Set default figure settings, either from options or saved file
+
+warning off
+if exist(opts.data_filename,'file')
+    LoadedStruct = load(opts.data_filename,'DefaultSettings');
+    if isempty(fieldnames(LoadedStruct))
+        % if Default Settings havent been saved off, use default default
+        % settings
+        default_struct = opts.DefaultSettings;
+    else
+        % use custom default settings
+        default_struct = LoadedStruct.DefaultSettings;
+    end
+else
+    % if Default Settings havent been saved off, use default default
+    % settings
+    default_struct = opts.DefaultSettings;
+end
+warning on
+
+for field = fieldnames(opts.DefaultSettings)'
+    f.UserData.(field{1}) = default_struct.(field{1});
+end
+
+% Read in duration limits
+read_duration_limits(f)
+end
+
+function restore_default_settings(f,f2,opts)
+%% Restore default settings (not much else to say here)
+
+f2.Pointer = 'watch'; drawnow
+
+% overwrite userdata with default settings
+set_default_settings(f,opts)
+
+% delete whats currently on display panel
+pan_obj = findobj(f2,'Tag','Display');
+delete(pan_obj.Children)
+
+% find option
+bg = findobj(f2,'Tag','Settings Button Group');
+
+% re-draw page page
+switch bg.SelectedObject.Text
+    case 'Colors'
+        disp_colors(f,f2,opts)
+    case 'Options'
+        disp_options(f,f2,opts)
+    case 'Task Layout'
+        % need to tell update script that the example task needs to be
+        % drawn again
+        f.UserData.Tasks(opts.max_num_tasks).isDrawn = false;
+
+        disp_task_layout(f,f2,opts)
+    otherwise
+        error('elseif err')
+end
+f2.Pointer = 'arrow'; drawnow
 end
