@@ -571,9 +571,11 @@ d_out_in = uisw.InnerPosition(1) - uisw.OuterPosition(1);
 uisw.Position = [d_out_in + opts.spacer + lbl_w,ypos,200,opts.tx_h];
 
 % add autosave label
-uilabel(p,'Text',autosave_str,...
+l = uilabel(p,'Text',autosave_str,...
     'Position',[opts.spacer,opts.spacer,200,opts.tx_h],...
-    'Tag','Autosave Label','VerticalAlignment','bottom');
+    'Tag','Autosave Label','VerticalAlignment','bottom'); 
+l.UserData.tmr = [];
+
 % ~~~ this displays a new save date without actually saving. needs 
 % autosave(f,opts,'manual')
 % ^ but actually, in what case would you need to save here? Does it matter

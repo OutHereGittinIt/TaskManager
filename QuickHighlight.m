@@ -14,7 +14,7 @@ switch PI.time_type
     case 'period' 
         time_period = PI.time_input;
     otherwise
-        error('Wrong time input. Use "total" or "per_it" for per iteration')
+        error('Wrong time input. Use "total" or "period" for per iteration')
 end
 
 % create timer
@@ -28,8 +28,17 @@ t.TasksToExecute    = PI.num_it;
 t.UserData.it_count = 1;
 t.UserData.Text_W2B = linspace(1,0,PI.num_it).*[1;1;1];
 
+% stop ongoing timer if already is one. 
+if ~isempty(tx_obj.UserData.tmr)
+    stop(tx_obj.UserData.tmr)
+end
+
+tx_obj.UserData.tmr = t;
+
 start(t)
 wait(t)
+
+tx_obj.UserData.tmr = [];
 end
 
 function PI = parse_inputs(tx_obj,f,varargin)
@@ -39,7 +48,7 @@ PI = inputParser;
 
 max_dim     = .7;
 num_it      = 50;
-time_input  = 1.75;     % seconds
+time_input  = 1.5;     % seconds
 time_type   = 'total';  % or 'period'
 w2b_flag    = false;    % word to background font change
 
