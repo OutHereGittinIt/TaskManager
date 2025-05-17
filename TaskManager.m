@@ -1585,29 +1585,28 @@ function edit_comment(f,Task_ind,opts)
 % 'Visible' property. Not literally opening or closing seperate window
 
 % options :
-area = [300,100];
-background_color = [.96,.96,.7]; % sort of a notepad yellow, if you will
+area = [450,100];
+background_color = [.97,.97,.72]; % sort of a notepad yellow, if you will
 FontSize = opts.fs; % borrow same fontsize as everything else, for now
-
 
 % look for existing text area
 Tag         = ['Comment ',num2str(Task_ind)];
 tasks_panel = findobj(f,'Tag','Tasks Panel');
 tx_obj      = findobj(tasks_panel,'Tag',Tag);
 btn         = findobj(tasks_panel,'Tag',['Add Comment ',num2str(Task_ind)]);
+Task        = f.UserData.Tasks(Task_ind);
+% complicated position statement here but it works
+tx_origin = [Task.xpos,Task.ypos]...
+    + [btn.Position(1),sum(btn.Position([2,4]))] - [area(1),0];
 
 if isempty(tx_obj)
     % create the textarea! Where the meat is here, if you will
 
-    if isempty(f.UserData.Tasks(Task_ind).Comment)
+    if isempty(Task.Comment)
         str_val = 'Add comment here';
     else
-        str_val = f.UserData.Tasks(Task_ind).Comment;
+        str_val = Task.Comment;
     end
-
-    % complicated position statement here but it works
-    tx_origin = [f.UserData.Tasks(Task_ind).xpos,f.UserData.Tasks(Task_ind).ypos]...
-        + [btn.Position(1),sum(btn.Position([2,4]))] - [area(1),0];
 
     uitextarea(tasks_panel,'Position',[tx_origin,area],'Tag',Tag,...
         'Value',str_val,'ValueChangedFcn',@(tx,~)store_comment(f,Task_ind,tx),...
@@ -1615,6 +1614,9 @@ if isempty(tx_obj)
         'BackgroundColor',background_color,...
         'FontSize',FontSize);
 else
+    % re-calculate position
+    tx_obj.Position(1:2) = tx_origin;
+
     % Toggle visibility
     tx_obj.Visible = ~tx_obj.Visible;
     if isempty(tx_obj.Value{1})
@@ -2315,7 +2317,7 @@ uibutton(f2,'Text','Set as New Default','FontSize',opts.fs,...
 % Restore Default
 btn_pos(1) = btn_pos(1) + opts.spacer + opts.btn_w_l;
 uibutton(f2,'Text','Restore Default','Visible','off','Tag','Restore Default',...
-    'Position',btn_pos,'ButtonPushedFcn',@(~,~)restore_default_settings(f,f2,opts))
+    'Position',btn_pos,'ButtonPushedFcn',@(~,~)restore_default_settings(f,f2,opts));
 end
 
 function restore_and_close_settings(f,f2)
@@ -3010,7 +3012,7 @@ function quick_comment_close(f,Task_ind,opts,event)
 % ~~~ do you remember the time I got the new version of matlab and it
 % solved one of my ui problems??
 % What problem was that..
-% I cant remember, was a little over a year ago I think. Whichc means
+% I cant remember, was a little over a year ago I think. Which means
 % there's a new version. Lets try it. 
 
 if numel(event.Value) > 1
@@ -3027,20 +3029,26 @@ f.UserData.Old = f.UserData; % ~~~ I am now inconsistent here :/ but I like this
 
 % toggle status
 f.UserData.Tasks(task_ind).isFolder = ~f.UserData.Tasks(task_ind).isFolder;
+Task = f.UserData.Tasks(task_ind);
 
 % so I can find the edit button switch the call option here, or do it in
 % update tasks. I think here is better, I suppose.
 
 % hide completion button for folders
-if f.UserData.Tasks(task_ind).isFolder
+if Task.isFolder
     edit_str        = 'edit folder';
     complete_visible = false;
+    % check for completion based on new status
+    if (~Task.Completed && ~isempty(Task.SubTasks) && isComplete_folder(f,task_ind)) ||...
+       (Task.Completed && ~isComplete_folder(f,task_ind)) 
+        toggle_complete_task_wrapper(f,task_ind,opts);
+    end
 else
     edit_str = 'edit task';
     complete_visible = true;
 end
 
-f.UserData.Tasks(task_ind).Labels.TaskBtns(1).Visible  = complete_visible;
+f.UserData.Tasks(task_ind).Labels.TaskBtns(1).Visible = complete_visible;
 
 task_edit_btn = findobj(f.UserData.Tasks(task_ind).Labels.Panel,'Tag',['Edit Item ',num2str(task_ind)]);
 task_edit_btn.ButtonPushedFcn = @(~,~)add_task_gui(f,task_ind,opts,edit_str);
