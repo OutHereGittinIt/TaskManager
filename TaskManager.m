@@ -3209,7 +3209,7 @@ end
 function prompt_AutoSetPriority_Retro_App(f,opts)
 %% Prompt user to apply autoset priority change retroactivley 
 
-dlg_w = 500;
+dlg_w = 650;
 btn_w = 200;
 
 height = 3*opts.spacer + 2*opts.btn_h;
