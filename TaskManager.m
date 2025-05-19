@@ -2445,7 +2445,7 @@ else
 end
    
 % color block and RGB
-add_color_objects(pan_obj,color_access_str,ypos,opts)
+add_color_objects(f,pan_obj,color_access_str,ypos,opts)
 
 if exist('limits_ind','var')
     % add delete option
@@ -2535,7 +2535,7 @@ disp_colors(f,f2,opts)
 HasChanged(f2)
 end
 
-function add_color_objects(pan_obj,color_access_str,ypos,opts)
+function add_color_objects(f,pan_obj,color_access_str,ypos,opts) %#ok<INUSD>
 %% Add Color Objects (Filled button, 1x3 RGB uitextares)
 
 xpos            = opts.color_objects_x0;
