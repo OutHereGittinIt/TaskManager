@@ -138,7 +138,7 @@ opts.btn_pan_h  = num_btns * (opts.spacer + opts.btn_h_l) + opts.spacer;
 opts.opts_pan_h = 6*opts.btn_h + 7 *opts.spacer;
 
 % stat panel height
-opts.stat_pan_h = 5*opts.tx_h + 6*opts.spacer;
+opts.stat_pan_h = 7*opts.tx_h + 8*opts.spacer;
 
 % figure size
 opts.fig_w = opts.left_pan_w + opts.task_pan_w + 3 * opts.spacer;
@@ -2845,9 +2845,10 @@ stats_pan = uipanel(f,'Tag','Statistics Panel','Position',panel_pos);
 % Contents : I'm thinking total, completed, past due, due this week??
 % ^ ~~~ lets just start with the three, revisit later
 
-Names = ["Existing Tasks","Completed Tasks","Tasks Past Due","Displayed Tasks","Deleted Tasks"];
-Value_w = 20; % width allocated to value label
+Names = ["Existing Tasks","Existing Folders","Completed Tasks","Incomplete Tasks","Displayed Tasks","Tasks Past Due","Deleted Tasks"];
+Value_w = 30; % width allocated to value label
 Name_w = opts.left_pan_w - opts.spacer - Value_w; % remaining width for name label
+%Name_w = 100; % leaving space
 
 % create 2 uilabels for each statistic, 1 for name and 1 for value (tagged)
 
@@ -2879,7 +2880,9 @@ function update_stats_pan(f)
 % tic
 stat_pan        = findobj(f,'Tag','Statistics Panel');
 exist_label     = findobj(stat_pan,'Tag','Existing Tasks');
+folder_label    = findobj(stat_pan,'Tag','Existing Folders');
 Complete_label  = findobj(stat_pan,'Tag','Completed Tasks');
+Incomplete_label= findobj(stat_pan,'Tag','Incomplete Tasks');
 Past_label      = findobj(stat_pan,'Tag','Tasks Past Due');
 Displayed_label = findobj(stat_pan,'Tag','Displayed Tasks');
 Deleted_label   = findobj(stat_pan,'Tag','Deleted Tasks');
@@ -2887,7 +2890,9 @@ Deleted_label   = findobj(stat_pan,'Tag','Deleted Tasks');
 
 if f.UserData.NumTasks == 0
     exits       = 0;
+    folders     = 0;
     completed   = 0;
+    incomplete  = 0;
     past        = 0;
     displayed   = 0;
     deleted     = 0;
@@ -2902,8 +2907,14 @@ else
     alive       = isTask & ~[Tasks.Deleted];
     exits       = numel(find(alive));
 
+    alive_f     = ~isTask & ~[Tasks.Deleted];
+    folders     = numel(find(alive_f));
+
     completed   = [Tasks.Completed] & alive;
     completed   = numel(find(completed));
+
+    incomplete  = ~[Tasks.Completed] & alive;
+    incomplete  = numel(find(incomplete));
 
     past        = [Tasks.PastDue] & alive;
     past        = numel(find(past));
@@ -2915,7 +2926,9 @@ end
 
 % assign values to label
 exist_label.Text        = num2str(exits);
+folder_label.Text       = num2str(folders);
 Complete_label.Text     = num2str(completed);
+Incomplete_label.Text   = num2str(incomplete);
 Past_label.Text         = num2str(past);
 Displayed_label.Text    = num2str(displayed);
 Deleted_label.Text      = num2str(deleted);
