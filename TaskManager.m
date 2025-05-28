@@ -2161,7 +2161,10 @@ if delete_state
 else
     delete_icon = 'trash.png';
 end
-f.UserData.Tasks(Task_ind).Labels.TaskBtns(end).Icon = delete_icon;
+
+if ~isempty(f.UserData.Tasks(Task_ind).Labels)
+    f.UserData.Tasks(Task_ind).Labels.TaskBtns(end).Icon = delete_icon;
+end
 
 for ind = f.UserData.Tasks(Task_ind).SubTasks 
     toggle_delete_task(f,ind)
@@ -3369,7 +3372,8 @@ function move_place_holder_panel(parent_panel,Tasks,opts)
 placeholder = findobj(parent_panel,'Tag','placeholder');
 if isempty(placeholder)
     initial_pos = [0,0,parent_panel.Position(3),opts.spacer];
-    placeholder = uipanel(parent_panel,'Position',initial_pos,...
+    placeholder = uipanel(parent_panel,'Tag','placeholder',...
+        'Position',initial_pos,...
         'BackgroundColor',parent_panel.BackgroundColor,'BorderType','none');
 end
 
