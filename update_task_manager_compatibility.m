@@ -92,6 +92,10 @@ if ~isfield(UserData,'AutoSetPriority')
     UserData.AutoSetPriority = false;
 end
 
+if ~isfield(UserData,'UnsavedChangesPresent')
+    UserData.UnsavedChangesPresent = false;
+end
+
 % Mark when this UserData file has been updated
-UserData.CompatabilityVerified = '4/25/2025';
+UserData.CompatabilityVerified = '5/27/2025';
 end

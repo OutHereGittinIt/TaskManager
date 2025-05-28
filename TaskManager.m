@@ -345,6 +345,9 @@ f.UserData.Tasks(opts.max_num_tasks,1) = empty_task(opts.max_num_tasks);
 % no default due date as default (not modifiable by UserData)
 f.UserData.DefaultDueDate = 'N/A';
 
+% no unsaved changes yet
+f.UserData.UnsavedChangesPresent = false;
+
 % Load defualt settings from file (if saved) or default default settings (default inception lol,maybe describe this better)
 set_default_settings(f,opts)
 
@@ -381,6 +384,9 @@ function f = create_figure(opts,name)
 f = uifigure('Name',[name,' Task Manager'],'Resize',false);
 f.Position(3:4) = [opts.fig_w,opts.fig_h];
 centerfig(f)
+
+% close request fcn
+f.CloseRequestFcn = @(self,~) exit_task_manager(self,opts);
 end
 
 function ExampleTask = empty_task(example_task_ind)
@@ -492,7 +498,7 @@ f = create_figure(opts,filename);
 % load UserData and check for / fix compatability!
 load(fullfile(opts.manager_loc,filename),'UserData')
 if ~isfield(UserData,'CompatabilityVerified')...
-        || ~isequal(UserData.CompatabilityVerified,'4/25/2025')
+        || ~isequal(UserData.CompatabilityVerified,'5/27/2025')
     UserData = update_task_manager_compatibility(UserData,opts);
     % save compatability update for this file
     save(fullfile(opts.manager_loc,filename),'UserData')
@@ -2194,9 +2200,19 @@ end
 function autosave_tasks(f,opts,manual)  %#ok<INUSD>
 %% save tasks to task manager file
 
-% only autosave if user selected
-if ~(f.UserData.Autosave || exist('manual','var'))
+manual_save = exist('manual','var');
+% only autosave if flag enabled
+if ~(f.UserData.Autosave || manual_save)
+    % establish that there is data that hasnt been saved
+    if ~f.UserData.UnsavedChangesPresent
+        f.UserData.UnsavedChangesPresent = true;
+    end
     return
+end
+
+% note that changes have been saved
+if f.UserData.UnsavedChangesPresent
+    f.UserData.UnsavedChangesPresent = false;
 end
 
 % filer uiobjects out of userdata (dont save 'em)
@@ -2209,6 +2225,8 @@ end
 
 % save userdata
 save(fullfile(opts.manager_loc,f.UserData.Name),'UserData')
+
+% change and highlight save time
 tx_obj      = findobj(f,'Tag','Autosave Label');
 tx_obj.Text = autosave_str;
 QuickHighlight(tx_obj,f)
@@ -3369,6 +3387,10 @@ function move_place_holder_panel(parent_panel,Tasks,opts)
 % ~~~ seems really weird that I have to do this. but dont know the better
 % way as of now.
 
+if isempty(Tasks)
+    return
+end
+
 placeholder = findobj(parent_panel,'Tag','placeholder');
 if isempty(placeholder)
     initial_pos = [0,0,parent_panel.Position(3),opts.spacer];
@@ -3378,6 +3400,79 @@ if isempty(placeholder)
 end
 
 % find placeholder height
-[max_height,task_ind] = max([Tasks.ypos]);
+[max_height,task_ind]   = max([Tasks.ypos]);
 placeholder.Position(2) = max_height + Tasks(task_ind).Height;
+end
+
+function exit_task_manager(f,opts)
+%% Close request function for main figure
+
+% prompt unsaved data changes subfigure
+if f.UserData.UnsavedChangesPresent
+    unsaved_changes_prompt(f,opts)
+    return
+end
+
+% find and close settings subfigures
+settings_fig_name = ['Task Manager ',f.UserData.Name,' Settings'];
+f2 = findall(groot,'Name',settings_fig_name);
+if ~isempty(f2)
+    close(f2)
+end
+
+% close main figure
+delete(f)
+end
+
+function unsaved_changes_prompt(f,opts)
+%% Prompt user to save changes before exiting task manager
+
+% create figure
+width = 500;
+height = opts.spacer*3 + opts.btn_h + opts.tx_h;
+f2 = uifigure('Name','Unsaved Changes Warning','Position',[0,0,width,height]);
+centerfig(f2)
+
+% Warning description
+desc = 'There are unsaved changes to this Task Manager. Do you want to save them before exiting?';
+lbl_pos = [0,2*opts.spacer + opts.btn_h,width,opts.tx_h];
+uilabel(f2,'Text',desc,'Position',lbl_pos,'HorizontalAlignment','center');
+
+% button 1: Save & Close
+btn_pos = [opts.spacer,opts.spacer,opts.btn_w,opts.btn_h];
+uibutton(f2,'Text','Save & Close','Position',btn_pos,...
+    'ButtonPushedFcn',@(~,~)save_and_exit(f,f2,opts));
+
+% button 2: Close without saving
+btn_pos(1) = 2*opts.spacer + opts.btn_w;
+btn_pos(3) = 1.5*opts.btn_w;
+uibutton(f2,'Text','Exit Without Saving','Position',btn_pos,...
+    'ButtonPushedFcn',@(~,~)exit_without_saving(f,f2))
+
+% button 3: Cancel
+btn_pos(1) = width - opts.btn_w - opts.spacer;
+btn_pos(3) = opts.btn_w;
+uibutton(f2,'Text','Cancel','Position',btn_pos,...
+    'ButtonPushedFcn',@(~,~)close(f2))
+end
+
+function save_and_exit(f,f2,opts)
+%% Save task manager and exit upon prompt
+close(f2)
+f.Pointer = 'watch';drawnow
+autosave_tasks(f,opts,'override autosave enable flag')
+pause(.5)
+f.Pointer = 'arrow';drawnow
+pause(.5)
+exit_task_manager(f,opts)
+end
+
+function exit_without_saving(f,f2)
+%% exit task manager upon prompt with unsaved changes
+
+% pretend that there are no unsaved changes and call the close request
+% function again
+close(f2)
+f.UserData.UnsavedChangesPresent = false;
+exit_task_manager(f)
 end
