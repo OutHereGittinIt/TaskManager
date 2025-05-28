@@ -38,7 +38,9 @@ tx_obj.UserData.tmr = t;
 start(t)
 wait(t)
 
-tx_obj.UserData.tmr = [];
+if isvalid(tx_obj)
+    tx_obj.UserData.tmr = [];
+end
 end
 
 function PI = parse_inputs(tx_obj,f,varargin)

@@ -799,6 +799,11 @@ Tasks = read_task_layout(f,Tasks,display_ind,opts);
 % Determine task positions
 Tasks = read_task_position(f.UserData.NumTasks,display_ind,Tasks,RankBy,opts);
 
+% Add placeholder panel for space above the top task
+if strcmpi(call_option,'normal')
+    move_place_holder_panel(parent_panel,Tasks(display_ind),opts)
+end
+
 % store read and ranked data
 f.UserData.Tasks = Tasks;
 
@@ -943,9 +948,9 @@ for task_ind = update_ind
     end
 
     %% Task Description
-    
+
     % Description text
-    if ~strcmpi(desc.Text,Task.Name)
+    if ~strcmp(desc.Text,Task.Name)
         desc.Text = Task.Name;
     end
 
@@ -3353,4 +3358,22 @@ switch bg.SelectedObject.Text
         error('elseif err')
 end
 f2.Pointer = 'arrow'; drawnow
+end
+
+function move_place_holder_panel(parent_panel,Tasks,opts)
+%% Create or move placeholder panel on task panel to add space on top task
+
+% ~~~ seems really weird that I have to do this. but dont know the better
+% way as of now.
+
+placeholder = findobj(parent_panel,'Tag','placeholder');
+if isempty(placeholder)
+    initial_pos = [0,0,parent_panel.Position(3),opts.spacer];
+    placeholder = uipanel(parent_panel,'Position',initial_pos,...
+        'BackgroundColor',parent_panel.BackgroundColor,'BorderType','none');
+end
+
+% find placeholder height
+[max_height,task_ind] = max([Tasks.ypos]);
+placeholder.Position(2) = max_height + Tasks(task_ind).Height;
 end
