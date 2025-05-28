@@ -1665,7 +1665,7 @@ function add_task_gui(f,task_ind,opts,option)
 subfigure_w = 4*opts.spacer + opts.lbl_w + opts.desc_w + opts.btn_w_s;
 
 % create subfigure
-f2 = uifigure('Name',option,'Resize','off'); 
+f2 = uifigure('Name',option,'Resize','off','Tag',['Task Manager ',f.UserData.Name,' Add/Edit Task']); 
 f2.UserData.isExpanded = false;
 
 % "add more" and "convert to" buttons for new and edit respectively
@@ -3413,12 +3413,17 @@ if f.UserData.UnsavedChangesPresent
     return
 end
 
-% find and close settings subfigures
+% find and close settings subfigure
 settings_fig_name = ['Task Manager ',f.UserData.Name,' Settings'];
 f2 = findall(groot,'Name',settings_fig_name);
 if ~isempty(f2)
     close(f2)
 end
+
+% find and close any add or edit task GUIs
+fig_Tag = ['Task Manager ',f.UserData.Name,' Add/Edit Task'];
+f2 = findall(groot,'Tag',fig_Tag);   
+close(f2)
 
 % close main figure
 delete(f)
