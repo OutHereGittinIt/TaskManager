@@ -949,7 +949,7 @@ for task_ind = update_ind
 
     %% Task Color
 
-    if task_panel.BackgroundColor ~= Task.Color
+    if ~isequal(task_panel.BackgroundColor,Task.Color)
         task_panel.BackgroundColor = Task.Color;
     end
 
