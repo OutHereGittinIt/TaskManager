@@ -34,10 +34,11 @@ function TaskManager
 
 % independent options :
 
-opts.ban_fs         = 21;
-opts.btn_h_s        = 20;
-opts.btn_h          = 23;
-opts.btn_h_l        = 26; % larger button height
+opts.ban_h          = 33; % banner height
+opts.ban_fs         = 21; % banner font size
+opts.btn_h_s        = 20; % button height (small)
+opts.btn_h          = 23; % button height
+opts.btn_h_l        = 26; % button height (large)
 opts.btn_h_xl       = 32;
 opts.btn_w_s        = 70;
 opts.btn_w          = 90;
@@ -119,7 +120,7 @@ opts.DefaultSettings.Show.DueDate           = true;
 opts.DefaultSettings.Show.Regularity        = false;
 opts.DefaultSettings.Show.Type              = false;
 
-num_btns = 7; % ~~~ read from function
+num_btns = add_fig_btns([],[],'Read only');
 
 % dependent option(s) calculations :
 
@@ -402,7 +403,7 @@ ExampleTask.Collapsed           = false;
 ExampleTask.Collapsing          = false;
 ExampleTask.Comment             = '';
 ExampleTask.Completed           = false;
-ExampleTask.CompletionDate      = '';
+ExampleTask.CompletionDate      = NaT;
 ExampleTask.CreationDate        = datetime;
 ExampleTask.Deleted             = false; 
 ExampleTask.DueDateRank         = [];
@@ -410,7 +411,7 @@ ExampleTask.isFolder            = false;
 ExampleTask.isOriginal          = true;
 ExampleTask.PastDue             = false;
 ExampleTask.ParentTask          = [];
-ExampleTask.Priority            = example_task_ind;
+ExampleTask.Priority            = example_task_ind; % ~~~ does this make sense?? I dont think it does
 ExampleTask.PriorityBtnYPos     = []; 
 ExampleTask.SubTasks            = [];
 ExampleTask.xpos                = [];
@@ -534,7 +535,7 @@ add_title_panel(f,opts)
 
 add_statistics_panel(f,opts)
 
-add_fig_btns(f,opts)
+add_fig_btns(f,opts);
 
 add_options_panel(f,opts)
 
@@ -603,23 +604,29 @@ function str = autosave_str
 str = ['Saved ',char(datetime,'MM/dd/uuuu hh:mm a')];
 end
 
-function add_fig_btns(f,opts)
+function num_btns = add_fig_btns(f,opts,ReadMode) %#ok<INUSD>
 %% Add Buttons to Figure 
 
 % Button data
-Text        = ["Add Task","Add Folder","Undo","Save Manager","New Manager","Load Manager","Settings"];
-Shortcut    = ["t","f","z","s","n","o","p"];
-Icon        = ["plus.png","folder.jpg","Undo.jpg","save.jpg","notes.jpg","download.png","settings.png"];
+Text        = ["Add Task","Add Folder","Undo","Save Manager","New Manager","Load Manager","Settings","Activity Monitor"];
+Shortcut    = ["t","f","z","s","n","o","p","a"];
+Icon        = ["plus.png","folder.jpg","Undo.jpg","save.jpg","notes.jpg","download.png","settings.png","look.jpg"];
 CallBack    = { @(~,~)add_task_gui(f,[],opts,'new task'),...
                 @(~,~)add_task_gui(f,[],opts,'new folder'),...
                 @(~,~)restore_previous_tasks(f,opts),...
                 @(~,~)autosave_tasks(f,opts,'manual'),...
                 @(~,~)MainMenu(opts),...
                 @(~,~)load_task_manager(f,opts),...
-                @(~,~)disp_settings(f,opts)};
+                @(~,~)disp_settings(f,opts),...
+                @(~,~)show_recent_activity(f,opts)};
 
 % size error check
 num_btns    = numel(Text);
+
+% return number of buttons for positioning calculations (read only mode)
+if exist('ReadMode','var')
+    return
+end
 
 % panel position
 f.UserData.y0 = f.UserData.y0 - opts.btn_pan_h - opts.spacer;
@@ -1402,10 +1409,11 @@ Edit.Visible         = true;
 % Complete
 if f.UserData.Tasks(Task_ind).Completed
     Complete.Icon   = 'uncomplete.png';
+    Complete.Tooltip = 'Set Task to Incomplete';
 else
-    Complete.Icon   = 'checkmark.png';
+    Complete.Icon    = 'checkmark.png';
+    Complete.Tooltip = 'Complete Task';
 end
-Complete.Tooltip    = 'Complete Task';
 Complete.CallBack   = @(~,~)toggle_complete_task_wrapper(f,Task_ind,opts);
 Complete.Visible    = ~isFolder;
 
@@ -1627,6 +1635,12 @@ if isempty(tx_obj)
         'BackgroundColor',background_color,...
         'FontSize',FontSize);
 else
+    % check for multiple lines in comment ~~~ this is an existing bug that
+    % still happens occasionally but shouldnt be here. I guess this works
+    if numel(tx_obj.Value) > 1
+        tx_obj.Value = tx_obj.Value{1};
+    end
+
     % re-calculate position
     tx_obj.Position(1:2) = tx_origin;
 
@@ -2086,11 +2100,15 @@ lbl_obj.Text = completed_task_string(f.UserData.Tasks(Task_ind),opts);
 
 % update icon 
 if complete_state
-    complete_icon = 'uncomplete.png';
+    icon    = 'uncomplete.png';
+    tooltip = 'Set Task to Incomplete';
 else
-    complete_icon = 'checkmark.png';
+    icon    = 'checkmark.png';
+    tooltip = 'Complete Task';
 end
-f.UserData.Tasks(Task_ind).Labels.TaskBtns(1).Icon = complete_icon;
+
+f.UserData.Tasks(Task_ind).Labels.TaskBtns(1).Icon    = icon;
+f.UserData.Tasks(Task_ind).Labels.TaskBtns(1).Tooltip = tooltip;
 
 % Check to toggle completion for parent_task recursively if exists and is folder
 if ~f.UserData.Tasks(Task_ind).isOriginal
@@ -2358,6 +2376,7 @@ end
 
 function apply_and_close_settings(f,f2,opts)
 %% Apply settings and redraw tasks
+
 read_duration_limits(f)
 clf(f)
 delete(f2)
@@ -2561,7 +2580,7 @@ disp_colors(f,f2,opts)
 HasChanged(f2)
 end
 
-function add_color_objects(f,pan_obj,color_access_str,ypos,opts) %#ok<INUSD>
+function add_color_objects(f,pan_obj,color_access_str,ypos,opts) 
 %% Add Color Objects (Filled button, 1x3 RGB uitextares)
 
 xpos            = opts.color_objects_x0;
@@ -2575,16 +2594,18 @@ btn = uibutton(pan_obj,'Position',btn_pos,'Text','','BackgroundColor',color0,...
 
 % (quadruple spacer here)
 xpos = xpos + btn_square_size + 4*opts.spacer;
-% R G B uitextarea
+% R G B uilabel + uitextarea
 Tags = {'R','G','B'};
 tx_pos = [xpos,ypos,opts.num_w,opts.num_h_l];
 for i = 1:3
+    % label
     uilabel(pan_obj,'Position',tx_pos,'Text',Tags{i},...
         'FontSize',opts.clr_fs,'VerticalAlignment','bottom');
     tx_pos([1,3]) = [tx_pos(1) + opts.num_w,opts.num_w_xl];
+    % text area
     uitextarea(pan_obj,'Position',tx_pos,'Value',num2str(round(color0(i),opts.rgb_int_round)),...
         'Tag',[color_access_str,' ',Tags{i}],'WordWrap','off',...
-        'ValueChangedFcn',@(tx,~)set_rgb_value(tx,btn,color_access_str,i),...
+        'ValueChangedFcn',@(tx,~)set_rgb_value(f,tx,btn,color_access_str,i),...
         'FontSize',opts.clr_fs);  %,'VerticalAlignment','bottom');
     tx_pos([1,3]) = [tx_pos(1) + opts.num_w_xl + opts.spacer,opts.num_w];
 end
@@ -2633,7 +2654,7 @@ if ~f2.UserData.FigureChanged
 end
 end
 
-function set_rgb_value(tx,btn,color_access_str,rgb_ind)
+function set_rgb_value(f,tx,btn,color_access_str,rgb_ind) %#ok<INUSD>
 %% Read in change to RGB value of given color, reflect change in f.UserData
 
 % ~~~ Add a check for num2str ~= NaN for bad digit entry
@@ -2735,9 +2756,8 @@ p = findobj(f2,'Tag','Display');
 
 % draw banner
 ban_str     = 'Task Layout Options';
-ban_h       = 33; % banner height
-ban_ypos    = p.Position(4) - opts.spacer - ban_h;
-ban_pos     = [0,ban_ypos,p.Position(3),ban_h];
+ban_ypos    = p.Position(4) - opts.spacer - opts.ban_h;
+ban_pos     = [0,ban_ypos,p.Position(3),opts.ban_h];
 uilabel(p,'Text',ban_str,'FontSize',opts.ban_fs,'Position',ban_pos,...
     'HorizontalAlignment','center');
 
@@ -3413,17 +3433,22 @@ if f.UserData.UnsavedChangesPresent
     return
 end
 
+%% Close subfigures
+% ~~~ I think there's a better way to do this. Dont care to find it right now
+
 % find and close settings subfigure
 settings_fig_name = ['Task Manager ',f.UserData.Name,' Settings'];
 f2 = findall(groot,'Name',settings_fig_name);
-if ~isempty(f2)
-    close(f2)
-end
+close(f2)
 
 % find and close any add or edit task GUIs
 fig_Tag = ['Task Manager ',f.UserData.Name,' Add/Edit Task'];
 f2 = findall(groot,'Tag',fig_Tag);   
 close(f2)
+
+% find and close recent activity subfigure
+f2 = findall(groot,'Name',['Task Manager ',f.UserData.Name,' Recent Activity']);
+close(f2) 
 
 % close main figure
 delete(f)
@@ -3480,4 +3505,138 @@ function exit_without_saving(f,f2)
 close(f2)
 f.UserData.UnsavedChangesPresent = false;
 exit_task_manager(f)
+end
+
+function show_recent_activity(f,opts)
+%% Create subfigure to show recent task completion/creation over past time ranges
+
+% elements : 
+% - uitabgroup, with each tab containing:
+%   - Total tasks completed, with names and dates when applicable
+%   - "", but for tasks created
+%   - anything for deleted? edited? commented? ~~~ *** 
+
+% disp totals in sentence (created, completed)
+% disp all creation and completion events 
+
+% ~~~ now if we wanted to, we could add a graph feature showing task
+% creations, completions, and more over time for this TM. 
+% ^ not a bad idea, hardly necessary, but so what? we're having fun
+
+% remove example task (last index) from activity monitoring (wouldnt count)
+Tasks = f.UserData.Tasks(1:end-1);
+
+fig_w = 600;
+fig_h = 450;
+
+% create figure
+f2 = uifigure('Name',['Task Manager ',f.UserData.Name,' Recent Activity'],'Resize','off');
+f2.Position(3:4) = [fig_w,fig_h];
+centerfig(f2)
+
+% add banner
+uilabel(f2,"Text",'Recent Actvitiy Board','FontSize',opts.ban_fs,...
+    'Position',[0,fig_h-opts.ban_h,fig_w,opts.ban_h],'HorizontalAlignment','center');
+
+% add uitabgroup 
+tg_pos = [opts.spacer,opts.spacer,fig_w - 2*opts.spacer,fig_h - opts.ban_h - opts.spacer];
+tg = uitabgroup(f2,'Position',tg_pos);
+
+% add note about using last completion date, not included if redone
+% ~~~^ add and change positions
+
+% add tabs by duration period to tabgroup
+duration_str = {'Today','Last week','Last month','Last year','Custom'};
+duration     = [days(1),days(7),days(31),years(1),days(nan)];
+
+for d_ind = 1:numel(duration) 
+
+    % create uitab for given duration
+    t = uitab(tg,'Title',duration_str{d_ind},'Scrollable','On');
+    lbl_pos = @ (y0) [opts.spacer,y0,t.Position(3) - opts.spacer,opts.tx_h];
+
+    % prompt custom timeframe (tough) ~~~ not done yet
+    if strcmp(duration_str{d_ind},'Custom')
+        warndlg('sorry, aint done this yet')
+    end
+
+    % find affected task indeces for given duration
+    if f.UserData.NumTasks == 0
+        Activity.created.ind    = [];
+        Activity.completed.ind  = [];
+        Activity.num_items      = 2;       
+    else
+        Activity = find_activity(Tasks,duration(d_ind));
+    end
+
+    % find starting vertical position for scrollable listing (avoid any
+    % negative positions in panel)
+    y0 = hfind_y0(Activity.num_items,t.Position(4),opts);
+
+    % write info to tab
+    for action = ["created","completed"]
+
+        % write total
+        num = numel(Activity.(action).ind);
+        total_str = num2str(num) + " Tasks " + action;
+        uilabel(t,'Text',total_str,'Position',lbl_pos(y0));
+        y0 = y0 - opts.tx_h;
+
+        % list actions
+        for ind = 1:length(Activity.(action).ind)
+           
+            task_ind    = Activity.(action).ind(ind);
+            date        = Activity.(action).dates(ind); 
+
+            % write date
+            Lbl_Pos = lbl_pos(y0);
+            uilabel(t,'Text',string(date),'Position',Lbl_Pos);
+
+            % write task name
+            Lbl_Pos(1) = 150; % ~~~ idk, new option
+            uilabel(t,'Text',Tasks(task_ind).Name,'Position',Lbl_Pos);
+            y0 = y0 - opts.tx_h;
+        end
+    end
+end
+end
+
+function Activity = find_activity(Tasks,duration)
+%% Return struct containing TM recent activity info
+
+% find date to search past using subtraction
+date0 = datetime - duration; 
+
+% creations
+Activity.created.ind     = find([Tasks.CreationDate] > date0);
+Activity.created.dates   = [Tasks(Activity.created.ind).CreationDate];
+
+% completions
+completed_ind = find([Tasks.Completed]);
+if isempty(completed_ind)
+    Activity.completed.ind      = [];
+    Activity.completed.dates    = [];
+else
+    within_range             = [Tasks(completed_ind).CompletionDate] > date0;
+    Activity.completed.ind   = completed_ind(within_range);
+    Activity.completed.dates = [Tasks(Activity.completed.ind).CompletionDate];
+end
+
+% return all labels(for predicting panel height)
+Activity.num_items = numel(Activity.completed.ind) + numel(Activity.created.ind) + 2;
+end
+
+function y0 = find_y0(num_items,panel_height,opts)
+%% Find starting vertical position for scrollable listing
+
+% minimum y0 wanted (to keep objects at top of panel)
+min_y0 = panel_height - opts.tx_h; 
+
+% y0 from items (total height)
+y0 = (num_items-1) * (opts.spacer + opts.tx_h);
+
+% override with min value as necessary
+if y0 < min_y0
+    y0 = min_y0;
+end
 end
