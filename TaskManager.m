@@ -3571,7 +3571,7 @@ for d_ind = 1:numel(duration)
 
     % find starting vertical position for scrollable listing (avoid any
     % negative positions in panel)
-    y0 = hfind_y0(Activity.num_items,t.Position(4),opts);
+    y0 = find_y0(Activity.num_items,t.Position(4),opts);
 
     % write info to tab
     for action = ["created","completed"]
