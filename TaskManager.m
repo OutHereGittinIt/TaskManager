@@ -493,7 +493,7 @@ else
 end
 
 % delete current figure, create new
-delete(f)
+% delete(f) ~~~ decided not to delete old figure
 f = create_figure(opts,filename);
 
 % load UserData and check for / fix compatability!
