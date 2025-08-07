@@ -860,7 +860,7 @@ for task_ind = update_ind
         end
     end
 
-    % grab objects
+    % grab objects (brevity)
     if Task.isDrawn
         task_panel      = Task.Labels.Panel;
         move_from_btn   = Task.Labels.MoveFrom;
@@ -3546,8 +3546,8 @@ tg = uitabgroup(f2,'Position',tg_pos);
 % ~~~^ add and change positions
 
 % add tabs by duration period to tabgroup
-duration_str = {'Today','Last week','Last month','Last year','Custom'};
-duration     = [days(1),days(7),days(31),years(1),days(nan)];
+duration_str = {'Today','Last week','Last month','Last 6 months','Last year','Custom'};
+duration     = [days(1),days(7),days(31),years(1/2),years(1),days(nan)];
 
 for d_ind = 1:numel(duration) 
 
