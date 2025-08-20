@@ -483,11 +483,6 @@ end
 function load_task_manager(opts,f,btn)
 %% prompt uigetfile to Load task manager
 
-% delete main menu (~~~ could do this in wrapper? or unnecessary)
-if exist('f','var')
-    delete(f)
-end
-
 if exist('btn','var')
     filename = btn.Text;
 else
@@ -495,6 +490,11 @@ else
     if filename == 0
         return
     end
+end
+
+% delete main menu (~~~ could do this in wrapper? or unnecessary)
+if exist('f','var')
+    delete(f)
 end
 
 % delete current figure, create new
