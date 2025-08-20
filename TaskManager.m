@@ -23,7 +23,7 @@ function TaskManager
 %% Options 
 % ~~~ add descriptors 
 
-% ~~~ really, if an item is not repeated, or especiaiflly if it is only used
+% ~~~ really, if an item is not repeated, or especially if it is only used
 % for a specific subGUI, it should not be here. Can be moved here later as
 % needed. But it would be good to clean this up.
 % ^ This idea needs a little more thought. Long term 
@@ -36,8 +36,8 @@ function TaskManager
 
 opts.ban_h          = 33; % banner height
 opts.ban_fs         = 21; % banner font size
-opts.btn_h_s        = 20; % button height (small)
-opts.btn_h          = 23; % button height
+opts.btn_h_s        = 19; % button height (small)
+opts.btn_h          = 22; % button height
 opts.btn_h_l        = 26; % button height (large)
 opts.btn_h_xl       = 32;
 opts.btn_w_s        = 70;
@@ -50,12 +50,12 @@ opts.clr_fs         = 16; %*
 opts.collapse_sz    = 17;
 opts.data_filename  = 'TaskManager_User_Data.mat';
 opts.DateFormat     = 'MM/dd/uuuu';
-opts.date_lbl_w_s   = 135; %**
-opts.date_lbl_w     = 155; %**'Autosave Label'
+opts.date_lbl_w     = 135; %**'Autosave Label'
 opts.default_fname  = 'MyTasks'; % ~~~ kinda silly, tbh
 opts.DefaultDurVal  = '3';
 opts.DefaultDurStr  = 'Days';
 opts.desc_w         = 400; % Task description width in add task GUI
+opts.dpw            = 125; % uidatepicker width
 opts.dr_lbl_w       = 50;
 opts.dr_w           = 145;
 opts.duedate_tx_w   = 75;
@@ -78,7 +78,7 @@ opts.OptionalFields = {'Due Date','Type','Regularity','Completion Date','Creatio
 opts.priority_btn_w = 32;
 opts.rgb_int_round  = 3; 
 opts.screen_height_ratio = .8;
-opts.scrollbar_w    = 15;
+opts.scrollbar_w    = 12;
 opts.spacer         = 5;
 opts.show_lbl_clr   = false;
 opts.tab_w          = 30; %**
@@ -228,7 +228,7 @@ uibutton(f,'Text','Create New','FontSize',opts.fs,...
     'VerticalAlignment','center');
 uibutton(f,'Text','Load','FontSize',opts.fs,...
     'Position',[2*btn_space + create_btn_w,ypos,load_btn_w,opts.btn_h],...
-    'ButtonPushedFcn',@(~,~)load_task_manager(opts),...
+    'ButtonPushedFcn',@(~,~)load_task_manager(opts,f),...
     'VerticalAlignment','center');
 
 % add previously loaded section
@@ -248,7 +248,7 @@ if exist(opts.data_filename,'file')
                 % create load button for previously loaded files
                 uibutton(f,'Text',LoadedList{i},'FontSize',opts.fs,...
                     'Position',[xpos,opts.spacer,file_btn_w,opts.btn_h],...
-                    'ButtonPushedFcn',@(btn,~)load_task_manager(opts,btn),...
+                    'ButtonPushedFcn',@(btn,~)load_task_manager(opts,f,btn),...
                     'VerticalAlignment','center');
 
                 xpos = xpos + opts.spacer + file_btn_w;
@@ -480,8 +480,13 @@ f.UserData.Limits               = Limits(LimitOrder);
 f.UserData.DurationLimits       = DurationLimits;
 end
 
-function load_task_manager(opts,btn)
+function load_task_manager(opts,f,btn)
 %% prompt uigetfile to Load task manager
+
+% delete main menu (~~~ could do this in wrapper? or unnecessary)
+if exist('f','var')
+    delete(f)
+end
 
 if exist('btn','var')
     filename = btn.Text;
@@ -1307,6 +1312,10 @@ else
 end
 
 Task = f.UserData.Tasks(task_ind);
+
+if isempty(Task.Width)
+    error('why is this occuring? Please Fix') % ~~~
+end
 
 % Write description
 lbl_pos = [opts.spacer,0,Task.Width - 2*opts.spacer,opts.lbl_h];
@@ -3523,11 +3532,11 @@ function show_recent_activity(f,opts)
 % creations, completions, and more over time for this TM. 
 % ^ not a bad idea, hardly necessary, but so what? we're having fun
 
-% remove example task (last index) from activity monitoring (wouldnt count)
-Tasks = f.UserData.Tasks(1:end-1);
 
-fig_w = 600;
-fig_h = 450;
+Tasks = f.UserData.Tasks(1:f.UserData.NumTasks);
+
+fig_w = 750;
+fig_h = 600;
 
 % create figure
 f2 = uifigure('Name',['Task Manager ',f.UserData.Name,' Recent Activity'],'Resize','off');
@@ -3537,6 +3546,8 @@ centerfig(f2)
 % add banner
 uilabel(f2,"Text",'Recent Actvitiy Board','FontSize',opts.ban_fs,...
     'Position',[0,fig_h-opts.ban_h,fig_w,opts.ban_h],'HorizontalAlignment','center');
+
+% add checkbox for including deleted items
 
 % add uitabgroup 
 tg_pos = [opts.spacer,opts.spacer,fig_w - 2*opts.spacer,fig_h - opts.ban_h - opts.spacer];
@@ -3553,84 +3564,220 @@ for d_ind = 1:numel(duration)
 
     % create uitab for given duration
     t = uitab(tg,'Title',duration_str{d_ind},'Scrollable','On');
-    lbl_pos = @ (y0) [opts.spacer,y0,t.Position(3) - opts.spacer,opts.tx_h];
 
     % prompt custom timeframe (tough) ~~~ not done yet
     if strcmp(duration_str{d_ind},'Custom')
-        warndlg('sorry, aint done this yet')
-    end
-
-    % find affected task indeces for given duration
-    if f.UserData.NumTasks == 0
-        Activity.created.ind    = [];
-        Activity.completed.ind  = [];
-        Activity.num_items      = 2;       
+        y0 = t.InnerPosition(4) - opts.btn_h - 30;
+        prompt_custom_date_range(t,Tasks,y0,opts);
+        return
     else
-        Activity = find_activity(Tasks,duration(d_ind));
+        % if not custom, search type is "after" a minimum date of today - timerange
+        SearchType  = 'after';
+        date0       = datetime - duration(d_ind);
     end
 
-    % find starting vertical position for scrollable listing (avoid any
-    % negative positions in panel)
-    y0 = find_y0(Activity.num_items,t.Position(4),opts);
+    % write activity labels
+    write_timed_activity(t,Tasks,date0,SearchType,false,opts);
+end
+end
 
-    % write info to tab
-    for action = ["created","completed"]
+function prompt_custom_date_range(t,Tasks,y0,opts,prev_search)
+%% Create uiobject for custom date range for recent activity board
 
-        % write total
-        num = numel(Activity.(action).ind);
-        total_str = num2str(num) + " Tasks " + action;
-        uilabel(t,'Text',total_str,'Position',lbl_pos(y0));
-        y0 = y0 - opts.tx_h;
+% radio button names and widths
+before.name = 'before';
+before.w    = 80;
+after.name  = 'after';
+after.w     = 70;
+btween.name = 'between';
+btween.w    = 95;
+net_w       = before.w + after.w + btween.w;
 
-        % list actions
-        for ind = 1:length(Activity.(action).ind)
-           
-            task_ind    = Activity.(action).ind(ind);
-            date        = Activity.(action).dates(ind); 
+opts.duedate_tx_w
+bg = uibuttongroup(t,'Position',[opts.spacer,y0,net_w,opts.tx_h],'BorderType','none');
 
-            % write date
-            Lbl_Pos = lbl_pos(y0);
-            uilabel(t,'Text',string(date),'Position',Lbl_Pos);
+% radio buttons
+btn_pos = [opts.spacer,0,nan,opts.tx_h];
+for btn = [before,after,btween]
 
-            % write task name
-            Lbl_Pos(1) = 150; % ~~~ idk, new option
-            uilabel(t,'Text',Tasks(task_ind).Name,'Position',Lbl_Pos);
-            y0 = y0 - opts.tx_h;
+    % correct width
+    btn_pos(3) = btn.w;
+
+    % create button
+    uiradiobutton(bg,'Text',btn.name,'Position',btn_pos);
+
+    % move position
+    btn_pos(1) = btn_pos(1) + btn_pos(3);
+end
+
+% date selection using uidatepicker here
+x0      = opts.spacer + net_w;
+dp1_pos = [x0,y0,opts.dpw,opts.btn_h];
+dp1     = uidatepicker(t,'Position',dp1_pos);
+
+% label and second uidaterange (visibilty conditional)
+x0      = x0 + opts.dpw;
+and_w   = 20;
+tx      = uilabel(t,"Text",'&','Position',[x0,y0,and_w,opts.tx_h],...
+    'HorizontalAlignment','center','VerticalAlignment','top','Visible','off');
+
+x0      = x0 + and_w;
+dp2     = uidatepicker(t,'Position',[x0,y0,opts.dpw,opts.btn_h],'Visible','off');
+
+bg.SelectionChangedFcn = @(self,~)switch_date_range_option(self,tx,dp2);
+
+% "execute search" button
+btn_pos = [net_w + opts.spacer + and_w + 2*opts.dpw + opts.spacer,y0,opts.btn_w_s,opts.btn_h];
+uibutton(t,'Text','Search','Position',btn_pos,'VerticalAlignment','top',...
+    'ButtonPushedFcn',@(~,~)write_custom_timed_activity(t,Tasks,bg,dp1,dp2,opts))
+
+% load previous search info if existing
+if exist("prev_search",'var')
+    bg.SelectedObject = findobj(bg,'Text',prev_search.SearchType);
+    switch_date_range_option(bg,tx,dp2)
+
+    dp1.Value = prev_search.date(1);
+    if strcmpi(prev_search.SearchType,'between')
+        dp2.Value = prev_search.date(2);
+    end
+end
+end
+
+function switch_date_range_option(self,tx,dp2)
+%% Implement switch between 'before' 'after' and 'between' daterange options
+
+isBetween = strcmpi(self.SelectedObject.Text,'between');
+% display text and datepicker2 objects if item is set to between
+tx.Visible  = isBetween;
+dp2.Visible = isBetween;
+end
+
+function write_custom_timed_activity(t,Tasks,bg,dp1,dp2,opts)
+%% Wrapper function to write timed activity from "custom" tab
+
+% grab info from GUI
+SearchType  = bg.SelectedObject.Text;
+date        = dp1.Value;
+if strcmpi(SearchType,'between')
+    date    = [date,dp2.Value];
+end
+
+% clear the tab
+delete(t.Children);
+
+% write the data as requested
+prompt_y0 = write_timed_activity(t,Tasks,date,SearchType,true,opts);
+
+prev_search.SearchType  = SearchType;
+prev_search.date        = date;
+
+% write the new prompt at correct y0
+prompt_custom_date_range(t,Tasks,prompt_y0,opts,prev_search)
+end
+
+function propmt_y0 = write_timed_activity(t,Tasks,date,SearchType,isCustom,opts)
+%% Write uilabels with activtiy report for given time range
+
+% find affected task indeces for given duration
+if isempty(Tasks)
+    Activity.created.ind    = [];
+    Activity.completed.ind  = [];
+    Activity.num_items      = 2;
+else
+    Activity = find_activity(Tasks,date,SearchType);
+end
+
+% find starting vertical position for scrollable listing (avoid any
+% negative positions in panel)
+y0 = find_y0(Activity.num_items,t.Position(4),isCustom,opts);
+
+propmt_y0 = y0 + opts.btn_h;
+
+% date, image and label positioning for each row
+date_pos    = @ (y0) [opts.spacer,                               y0, opts.date_lbl_w,                opts.tx_h];
+im_pos      = @ (y0) [opts.spacer + opts.date_lbl_w,             y0, opts.tx_h,                      opts.tx_h];
+lbl_pos     = @ (y0) [opts.spacer + opts.date_lbl_w + opts.tx_h, y0, t.Position(3) - opts.spacer,    opts.tx_h];
+
+% write info to tab
+for action = ["created","completed"]
+
+    % write total
+    num = numel(Activity.(action).ind);
+    total_str = num2str(num) + " Tasks " + action;
+    uilabel(t,'Text',total_str,'Position',lbl_pos(y0));
+    y0 = y0 - opts.tx_h;
+
+    % list actions
+    for ind = 1:length(Activity.(action).ind)
+
+        task_ind    = Activity.(action).ind(ind);
+        date        = Activity.(action).dates(ind);
+
+        % write date
+        uilabel(t,'Text',string(date),'Position',date_pos(y0));
+
+        % show folder icon
+        if Tasks(task_ind).isFolder
+            % image source file path for folder
+            IS = fullfile(opts.folder,'icons','folder.jpg');
+
+            % image position
+            uiimage(t,"ImageSource",IS,'Position',im_pos(y0))
         end
+
+        % write task name
+        uilabel(t,'Text',Tasks(task_ind).Name,'Position',lbl_pos(y0));
+        y0 = y0 - opts.tx_h;
     end
 end
 end
 
-function Activity = find_activity(Tasks,duration)
+function Activity = find_activity(Tasks,Date,SearchType)
 %% Return struct containing TM recent activity info
 
-% find date to search past using subtraction
-date0 = datetime - duration; 
+% determine logical statement to use based on searchtype
+switch lower(SearchType)
+    case 'after'
+        within_range = @(date) date > Date;
+    case 'before'
+        within_range = @(date) date < Date;
+    case 'between'
+        % work in either order
+        Date = sort(Date);
+        within_range = @(date) date > Date(1) & date < Date(2);
+    otherwise
+        error('elseif err')
+end
 
 % creations
-Activity.created.ind     = find([Tasks.CreationDate] > date0);
-Activity.created.dates   = [Tasks(Activity.created.ind).CreationDate];
+ind                     = find(within_range([Tasks.CreationDate]));
+Activity.created.ind    = ind;
+Activity.created.dates  = [Tasks(ind).CreationDate];
 
 % completions
 completed_ind = find([Tasks.Completed]);
 if isempty(completed_ind)
-    Activity.completed.ind      = [];
-    Activity.completed.dates    = [];
+    Activity.completed.ind   = [];
+    Activity.completed.dates = [];
 else
-    within_range             = [Tasks(completed_ind).CompletionDate] > date0;
-    Activity.completed.ind   = completed_ind(within_range);
-    Activity.completed.dates = [Tasks(Activity.completed.ind).CompletionDate];
+    ind                      = completed_ind(within_range([Tasks(completed_ind).CompletionDate]));
+    Activity.completed.ind   = ind;
+    Activity.completed.dates = [Tasks(ind).CompletionDate];
 end
 
-% return all labels(for predicting panel height)
+% return all labels (for predicting panel height (add two for labels)
 Activity.num_items = numel(Activity.completed.ind) + numel(Activity.created.ind) + 2;
 end
 
-function y0 = find_y0(num_items,panel_height,opts)
+function y0 = find_y0(num_items,panel_height,isCustom,opts)
 %% Find starting vertical position for scrollable listing
 
 % minimum y0 wanted (to keep objects at top of panel)
 min_y0 = panel_height - opts.tx_h; 
+
+if isCustom
+    min_y0 = min_y0 - opts.btn_h;
+end
 
 % y0 from items (total height)
 y0 = (num_items-1) * (opts.spacer + opts.tx_h);
