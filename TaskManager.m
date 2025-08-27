@@ -75,6 +75,7 @@ opts.num_w_l        = 28; %*
 opts.num_w_xl       = 48; %*
 opts.num_h_l        = 24.5; %*
 opts.OptionalFields = {'Due Date','Type','Regularity','Completion Date','Creation Date'};
+opts.pgb_min        = 10; % minimum number of task drawings for progress bar appearance
 opts.priority_btn_w = 32;
 opts.rgb_int_round  = 3; 
 opts.screen_height_ratio = .8;
@@ -531,8 +532,6 @@ end
 function draw_figure(f,opts)
 %% Draw All Elements of the uifigure
 
-pgb = uiprogressdlg(f,"Message","Loading Tasks...","ShowPercentage",true,'Value',0);
-
 % start from top
 f.UserData.y0 = opts.fig_h;
 
@@ -544,13 +543,10 @@ add_fig_btns(f,opts);
 
 add_options_panel(f,opts)
 
-add_tasks_panel(f,opts,pgb)
+add_tasks_panel(f,opts)
 
 % remove vertical position counter
 f.UserData = rmfield(f.UserData,'y0');
-
-% remove progress bar
-delete(pgb)
 
 focus(f)
 end
@@ -717,7 +713,7 @@ apply_btn = findobj(f,'Tag','Apply Button');
 apply_btn.Visible = true;
 end
 
-function add_tasks_panel(f,opts,pgb)
+function add_tasks_panel(f,opts)
 %% Create Panel to Display Tasks 
 
 task_pan = uipanel(f,'Tag','Tasks Panel','Scrollable','on',...
@@ -736,10 +732,10 @@ else
 end
 
 % redraw panel to display the tasks
-update_tasks_panel(f,opts,'normal',pgb)
+update_tasks_panel(f,opts,'normal')
 end
 
-function update_tasks_panel(f,opts,call_option,pgb)
+function update_tasks_panel(f,opts,call_option)
 %% Check for and update tasks panel GUI properties
 
 % for brevity (and efficiency)
@@ -770,7 +766,7 @@ end
 
 % initializing updating status
 parent_fig.Pointer = 'watch'; drawnow;
-% parent_panel.Visible = false; ~~~ CHANGE! Just for debug
+parent_panel.Visible = false; % *** CHANGE for debug
 
 switch call_option
     case 'normal'
@@ -825,10 +821,19 @@ end
 % store read and ranked data
 f.UserData.Tasks = Tasks;
 
-% Loop through tasks and check + update all dynamic proprerties
-num_tasks       = numel(display_ind);
-num_tasks_drawn = 0;
+% find tasks to be drawn in update
+total_task_drawings = numel(find(~[Tasks(update_ind).isDrawn] & Display_vec(update_ind)));
 
+% create progress bar if a certain amount
+if total_task_drawings > opts.pgb_min
+    pgb = uiprogressdlg(f,"Message","Loading Tasks...","ShowPercentage",true,'Value',0);
+    pgb_exist = true;
+    num_tasks_drawn = 0;
+else
+    pgb_exist = false;
+end
+
+% Loop through tasks and check + update all dynamic proprerties
 for task_ind = update_ind
 
     Task = Tasks(task_ind);
@@ -843,8 +848,8 @@ for task_ind = update_ind
 
     %% Task Existence
 
+    % Create task uipanel, with icons & labels. if needed.
     if ~Task.isDrawn && Display_vec(task_ind)
-        % Create task uipanel, with icons & labels.
         create_task_panel(f,task_ind,parent_panel,opts);
         Task = f.UserData.Tasks(task_ind);
 
@@ -859,9 +864,9 @@ for task_ind = update_ind
         f.UserData.Tasks(task_ind) = Task;
 
         % reflect as completed in uiprogressbar
-        if exist('pgb','var')
+        if pgb_exist
             num_tasks_drawn = num_tasks_drawn + 1;
-            pgb.Value = num_tasks_drawn/num_tasks;
+            pgb.Value = num_tasks_drawn/total_task_drawings;
         end
     end
 
@@ -1052,6 +1057,11 @@ end
 % finish updating
 parent_panel.Visible  = 'on';
 parent_fig.Pointer = 'arrow'; drawnow;
+
+% remove progress bar
+if pgb_exist
+    delete(pgb)
+end
 focus(parent_fig) % yes! Rare victory here. This works (so far)
 end
 
