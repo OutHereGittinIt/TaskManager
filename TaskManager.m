@@ -878,18 +878,31 @@ for task_ind = update_ind
         collapse        = Task.Labels.Collapse;
         desc            = Task.Labels.Description;
         date_str        = Task.Labels.DueDate;
+
+        comment         = findobj(parent_panel,'Tag',['Comment ',num2str(task_ind)]);
+        if isempty(comment)
+            comment = struct('Visible',false);
+        end
     end
 
     %% Visibility
 
-    % check that (should be) displayed matches visible
+    % panel visibility
     if Task.isDrawn && task_panel.Visible ~= Display_vec(task_ind)
         task_panel.Visible = Display_vec(task_ind);
+
+        % collapse icon visibility
         if collapsable
             collapse.Visible = Display_vec(task_ind);
         end
+
+        % comment visibility
+        if ~Display_vec(task_ind) && comment.Visible
+            edit_comment(parent_fig,task_ind,opts)
+        end
     end
 
+    % move to/from icons visibility
     if ~Display_vec(task_ind)
         if Task.isDrawn
             % make sure move to and move from buttons are not showing
@@ -912,7 +925,7 @@ for task_ind = update_ind
         return
     end
 
-    %% Collapse existence
+    %% Collapse status
 
     if collapsable && isempty(collapse)
         % add collapsable icon if not already added and is appropriate
@@ -1635,6 +1648,13 @@ tasks_panel = findobj(f,'Tag','Tasks Panel');
 tx_obj      = findobj(tasks_panel,'Tag',Tag);
 btn         = findobj(tasks_panel,'Tag',['Add Comment ',num2str(Task_ind)]);
 Task        = f.UserData.Tasks(Task_ind);
+
+% If task no longer displayed (no origin position set), just call it a day
+if isempty(Task.xpos) && ~isempty(tx_obj)
+    tx_obj.Visible = false;
+    return 
+end
+
 % complicated position statement here but it works
 tx_origin = [Task.xpos,Task.ypos]...
     + [btn.Position(1),sum(btn.Position([2,4]))] - [area(1),0];
@@ -3094,6 +3114,8 @@ function quick_comment_close(f,Task_ind,opts,event)
 % What problem was that..
 % I cant remember, was a little over a year ago I think. Which means
 % there's a new version. Lets try it. 
+
+% ~~~ this is STILL not working. What the heck
 
 if numel(event.Value) > 1
     event.Source.Value = event.Value{1};
